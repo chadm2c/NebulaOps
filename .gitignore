@@ -1,0 +1,57 @@
+# Documentation
+nebulaops_prd.md
+ai_prd.md
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.nfs*
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Python / Backend
+backend/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
+backend/.venv/
+backend/env/
+backend/venv/
+backend/ENV/
+backend/.env
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.mypy_cache/
+backend/pip-log.txt
+backend/pip-delete-this-directory.txt
+
+# Docker
+.docker_stats/
+*.log
+docker-compose.override.yml
+
+# Temporary files
+tmp/
+temp/

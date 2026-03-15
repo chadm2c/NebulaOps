@@ -1,0 +1,24 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting docker
+  Downloading docker-7.1.0-py3-none-any.whl.metadata (3.8 kB)
+Collecting pywin32>=304 (from docker)
+  Downloading pywin32-311-cp314-cp314-win_amd64.whl.metadata (10 kB)
+Collecting requests>=2.26.0 (from docker)
+  Downloading requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+Collecting urllib3>=1.26.0 (from docker)
+  Downloading urllib3-2.6.3-py3-none-any.whl.metadata (6.9 kB)
+Collecting charset_normalizer<4,>=2 (from requests>=2.26.0->docker)
+  Downloading charset_normalizer-3.4.5-cp314-cp314-win_amd64.whl.metadata (39 kB)
+Requirement already satisfied: idna<4,>=2.5 in c:\users\imane\appdata\roaming\python\python314\site-packages (from requests>=2.26.0->docker) (3.11)
+Collecting certifi>=2017.4.17 (from requests>=2.26.0->docker)
+  Using cached certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+Downloading docker-7.1.0-py3-none-any.whl (147 kB)
+Downloading pywin32-311-cp314-cp314-win_amd64.whl (9.7 MB)
+   ---------------------------------------- 9.7/9.7 MB 9.2 MB/s  0:00:01
+Downloading requests-2.32.5-py3-none-any.whl (64 kB)
+Downloading charset_normalizer-3.4.5-cp314-cp314-win_amd64.whl (143 kB)
+Downloading urllib3-2.6.3-py3-none-any.whl (131 kB)
+Using cached certifi-2026.2.25-py3-none-any.whl (153 kB)
+Installing collected packages: pywin32, urllib3, charset_normalizer, certifi, requests, docker
+
+Successfully installed certifi-2026.2.25 charset_normalizer-3.4.5 docker-7.1.0 pywin32-311 requests-2.32.5 urllib3-2.6.3
