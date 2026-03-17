@@ -185,14 +185,13 @@ export function useDocker() {
     if (callbacks.onClose) ws.onclose = callbacks.onClose
     
     ws.onmessage = (event) => {
-      if (callbacks.onData) {
-        if (event.data instanceof Blob) {
-          const reader = new FileReader()
-          reader.onload = () => callbacks.onData(reader.result)
-          reader.readAsText(event.data)
-        } else {
-          callbacks.onData(event.data)
-        }
+      if (!callbacks.onData) return
+      
+      if (typeof event.data === 'string') {
+        callbacks.onData(event.data)
+      } else if (event.data instanceof Blob) {
+        // Optimized blob handling
+        event.data.text().then(text => callbacks.onData(text))
       }
     }
     

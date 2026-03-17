@@ -8,19 +8,6 @@ import { useDocker } from '../hooks/useDocker'
 import 'xterm/css/xterm.css'
 import './RemoteBridge.css'
 
-const ASCII_ART = (id) => `
-\x1b[1;36m   _   _                  __  __                                                   _ 
- | \\ | | _____  ___   _| || |____                                   ___  ___ | || |
- |  \\| |/ _ \\ \\/ / | | | || |_  /                                  / _ \\| __|| || |
- | |\\  |  __/ /> <| |_| || |  | |__   _   _  ___  ___  ___  ____ | (_) | |_ | || |
- |_| \\_|\\___|/_/\\_\\___,_||_|  \\___| |_| | |/ __|/ _ \\| __||____|\\___/ \\__||_||_|
- \x1b[0m
- \x1b[1;33m[ SYSTEMS ONLINE ]\x1b[0m  --  \x1b[1;35m"NEBULA OPS"\x1b[0m
-
- \x1b[1;37mCONTAINER_ID :\x1b[0m  \x1b[1;36m${id}\x1b[0m
- \x1b[1;37mSTATUS       :\x1b[0m  \x1b[1;32mREADY\x1b[0m
- \x1b[1;37mUPLINK       :\x1b[0m  \x1b[1;34mPTY_SOCKET_ACTIVE\x1b[0m
- `
 
 const RemoteBridge = ({ container, onClose }) => {
   const terminalRef = useRef(null)
@@ -76,8 +63,6 @@ const RemoteBridge = ({ container, onClose }) => {
       xtermRef.current = term
       fitAddonRef.current = fitAddon
 
-      // Initial ASCII Art
-      term.writeln(ASCII_ART(container.id))
       
       // Initialize WebSocket Session with immediate callbacks
       const session = docker.openTerminal(container.id, {

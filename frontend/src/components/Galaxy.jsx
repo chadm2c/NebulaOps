@@ -3,8 +3,10 @@ import { useFrame, useThree } from '@react-three/fiber'
 import ContainerStar from './ContainerStar'
 import DataComet from './DataComet'
 import NetworkConnection from './NetworkConnection'
+import ConstellationLines from './ConstellationLines'
+import AICopilotDrone from './AICopilotDrone'
 
-function Galaxy({ containers, onSelect, selectedId, highlightedNetwork, onWarpTo, onToggleConstellation, onOpenBridge }) {
+function Galaxy({ containers, onSelect, selectedId, highlightedNetwork, onWarpTo, onToggleConstellation, onOpenBridge, clusters, incidents, aiInsight, onCopilotClick, isChatOpen }) {
   const groupRef = useRef()
   const positionsRef = useRef({})
   const [comets, setComets] = useState([])
@@ -68,6 +70,8 @@ function Galaxy({ containers, onSelect, selectedId, highlightedNetwork, onWarpTo
   return (
     <group ref={groupRef}>
       <NetworkConnection containers={containers} />
+      <ConstellationLines containers={containers} clusters={clusters} />
+      <AICopilotDrone insight={aiInsight} onClick={onCopilotClick} isChatOpen={isChatOpen} />
       
       {containers.map((container, index) => {
         const pos = positionsRef.current[container.id] || container.position || {
@@ -89,6 +93,7 @@ function Galaxy({ containers, onSelect, selectedId, highlightedNetwork, onWarpTo
             onToggleConstellation={onToggleConstellation}
             onOpenBridge={onOpenBridge}
             highlightedNetwork={isHighlighted ? container.network : null}
+            incident={incidents?.find(inc => inc.container_id === container.id)}
           />
         )
       })}

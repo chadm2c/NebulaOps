@@ -1,0 +1,51 @@
+NEBULAOPS: COMPREHENSIVE PRESENTATION GUIDE
+==========================================
+
+1. PROJECT OVERVIEW
+-------------------
+NebulaOps is a next-generation, open-source DevOps observability platform that visualizes Docker infrastructure as a real-time, navigable 3D galaxy. Its core mission is to transform complex, fragmented metric data into an intuitive spatial mental model, allowing engineers to "see" their systems instead of just reading about them.
+
+2. CORE VISUAL FEATURES
+-----------------------
+* REVOLUTIONARY STAR VISUALS: Each container is rendered as a scientifically-inspired burning sun. Features include:
+    - SOLAR GRANULATION: Dynamic surface patterns using custom GLSL shaders that simulate convective plasma.
+    - VOLUMETRIC CORONA: Glowing atmospheric layers that expand and change color based on health data.
+    - HEAT MAPPING: Stars change from healthy Cyan to critical Red based on real-time CPU and Memory consumption.
+* STAR BIRTH ANIMATION: Cinematic "explosion" effect when a new container is detected. New nodes burst into the galaxy with a brilliant white flash and smooth scaling.
+* PROCEDURAL NEBULA: A deep-space dust cloud and star field background that provides depth and immersion using 60,000+ individual particles.
+
+3. AI INTELLIGENCE FEATURES
+---------------------------
+* KINETIC AI COPILOT: A floating drone agent that serves as your DevOps assistant.
+    - CHAT ACTIVATION: Upon interaction, the drone detaches from its orbit and flies "front-and-center" to the camera, creating an immersive conversation experience.
+    - ROAMING INTELLIGENCE: The drone is aware of all container states and provides real-time infrastructure insights.
+* AUTOMATED CONSTELLATIONS: AI-driven clustering that automatically detects service relationships (e.g., API + Database) and connects them with glowing energy beams, revealing the true topology of the system.
+* INCIDENT "BLACK HOLES": Critical system failures and resource anomalies are visualized as gravitational anomalies. Problematic containers collapse visually or trigger solar flare effects, making issues impossible to miss.
+* INFRASTRUCTURE EXPLAINER: An AI module that analyzes the entire galaxy and provides a natural language breakdown of what is running and how it interacts.
+
+4. INTERACTIVE TOOLSET
+----------------------
+* REMOTE BRIDGE TERMINAL: A low-latency, built-in terminal that provides direct 'docker exec' access to any container in the galaxy. Optimized with 50ms polling for snappy, real-time command response.
+* HOLOGRAPHIC HUD: Clicking any star opens a futuristic 3D interface providing:
+    - Detailed resource telemetry.
+    - Live logs with AI summarization (detects errors automatically).
+    - Network membership and topology data.
+    - Lifecycle controls (Start, Stop, Restart, Pause).
+* TACTICAL NAVIGATION: 
+    - ORBIT CONTROLS: Intuitive zoom, pan, and rotate through the infrastructure.
+    - WARP-TO-NODE: The camera can physically travel to a specific container, refocusing the viewport for precision debugging.
+
+5. TECHNICAL ARCHITECTURE
+--------------------------
+* FRONTEND: Built with React and React Three Fiber (Three.js). Uses high-performance WebGL shaders to maintain 60FPS even with high-density data.
+* BACKEND: A high-performance FastAPI server acting as a gateway to the Docker Engine API.
+* REAL-TIME STREAMING: A bi-directional WebSocket system that pushes state changes from the Docker Engine to the 3D renderer in milliseconds.
+* AI STACK: Integrates with LLMs (OpenAI/GitHub Models) for log analysis, descriptive architecture modeling, and copilot chat logic.
+
+6. TARGET AUDIENCE & VALUE
+--------------------------
+* TARGET: DevOps Engineers, Platform Teams, and SREs managing dense container environments.
+* VALUE: Reduces cognitive load during incidents, provides instant system awareness, and simplifies complex infrastructure for training and presentations.
+
+==========================================
+NEBULAOPS - SEEING IS SOLVING.

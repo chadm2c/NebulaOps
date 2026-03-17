@@ -1,4 +1,9 @@
+import os
 import asyncio
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 import math
 import random
 import time
@@ -8,6 +13,15 @@ from typing import List, Dict, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from app.ai.constellation_mapper import group_containers_into_constellations
+from app.ai.incident_detector import detect_incidents
+from app.ai.copilot_agent import CopilotAgent
+from app.ai.log_summarizer import LogSummarizer
+from app.ai.infrastructure_explainer import InfrastructureExplainer
+
+copilot = CopilotAgent()
+log_summarizer = LogSummarizer()
+explainer = InfrastructureExplainer()
 
 DOCKER_CLIENT = None
 DOCKER_AVAILABLE = False
@@ -161,9 +175,9 @@ def get_real_containers() -> List[Dict[str, Any]] | None:
                 'name': container.name,
                 'image': container.image.tags[0] if container.image.tags else container.image.short_id,
                 'status': container.status,
-                'cpu_percent': round(float(cpu_percent), 2),
-                'memory_percent': round(float(mem_percent), 2),
-                'memory_usage': mem_usage,
+                "cpu_percent": round(cpu_percent, 2),
+                "memory_percent": round(mem_percent, 2),
+                "memory_usage": round(mem_usage, 2),
                 'network_rx': network_rx,
                 'network_tx': network_tx,
                 'created': container.attrs.get('Created', time.time()),
@@ -300,6 +314,38 @@ async def unpause_container(container_id: str):
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+@app.get("/api/containers/{container_id}/ai-logs")
+async def get_container_ai_logs(container_id: str):
+    if not DOCKER_AVAILABLE:
+        return {"summary": "AI Summarization unavailable: Docker connection failed."}
+    try:
+        container = DOCKER_CLIENT.containers.get(container_id)
+        raw_logs = container.logs(tail=100).decode('utf-8')
+        summary = log_summarizer.summarize(raw_logs)
+        return {"summary": summary}
+    except Exception as e:
+        return {"summary": f"AI Summarization error: {str(e)}"}
+
+@app.get("/api/ai/explain")
+async def explain_infrastructure():
+    if not DOCKER_AVAILABLE:
+        return {"explanation": "Temporal analysis unavailable: Docker engine offline."}
+    try:
+        containers = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "status": c.status,
+                "image": c.image.tags[0] if c.image and c.image.tags else "unknown",
+                "network": list(c.attrs.get('NetworkSettings', {}).get('Networks', {}).keys())[0] if c.attrs.get('NetworkSettings', {}).get('Networks') else "none"
+            } for c in DOCKER_CLIENT.containers.list()
+        ]
+        clusters = group_containers_into_constellations(containers)
+        explanation = explainer.explain(containers, clusters)
+        return {"explanation": explanation}
+    except Exception as e:
+        return {"explanation": f"AI Analysis failed: {str(e)}"}
 
 @app.get("/api/containers/{container_id}/logs")
 async def get_container_logs(container_id: str, tail: int = 100):
@@ -463,11 +509,11 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
         def socket_to_ws():
             nonlocal socket_closed
             try:
-                # Set a timeout if possible to allow checking stop_event
+                # Set a much shorter timeout for snappy terminal response
                 if hasattr(sock, 'settimeout'):
-                    sock.settimeout(0.5)
+                    sock.settimeout(0.05)
                 elif hasattr(sock, '_sock') and hasattr(sock._sock, 'settimeout'):
-                    sock._sock.settimeout(0.5)
+                    sock._sock.settimeout(0.05)
                 
                 while not stop_event.is_set():
                     try:
@@ -585,13 +631,42 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             real_containers = get_real_containers()
             containers = real_containers if real_containers is not None else get_demo_containers()
+            
+            # AI Intelligence Layers
+            clusters = group_containers_into_constellations(containers)
+            incidents = detect_incidents(containers)
+            insight = copilot.analyze_infrastructure(containers, clusters, incidents)
+            
             await websocket.send_json({
                 'type': 'containers',
-                'data': containers
+                'data': containers,
+                'clusters': clusters,
+                'incidents': incidents,
+                'ai_insight': insight,
             })
             await asyncio.sleep(2)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[Dict[str, str]] = []
+
+@app.post("/api/ai/chat")
+async def ai_chat(request: ChatRequest):
+    real_containers = get_real_containers()
+    containers = real_containers if real_containers is not None else get_demo_containers()
+    clusters = group_containers_into_constellations(containers)
+    incidents = detect_incidents(containers)
+    
+    context = {
+        "containers": containers,
+        "clusters": clusters,
+        "incidents": incidents
+    }
+    
+    response = copilot.chat(request.message, request.history, context)
+    return {"message": response}
 
 if __name__ == "__main__":
     import uvicorn

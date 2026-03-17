@@ -6,6 +6,8 @@ import Galaxy from './components/Galaxy'
 import DeepDataNebula from './components/DeepDataNebula'
 import DustCloud from './components/DustCloud'
 import RemoteBridge from './components/RemoteBridge'
+import AIArchitectureExplainer from './components/AIArchitectureExplainer'
+import AICopilotChat from './components/AICopilotChat'
 import './App.css'
 
 function CameraController({ targetPosition, enabled }) {
@@ -57,6 +59,15 @@ function App() {
   const [isWarping, setIsWarping] = useState(false)
   const [highlightedNetwork, setHighlightedNetwork] = useState(null)
   const [activeBridge, setActiveBridge] = useState(null)
+  const [aiClusters, setAiClusters] = useState([])
+  const [aiIncidents, setAiIncidents] = useState([])
+  const [aiInsight, setAiInsight] = useState("")
+  const prevContainerIdsRef = useRef(new Set())
+  const [newContainerIds, setNewContainerIds] = useState(new Set())
+  
+  // Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
 
   useEffect(() => {
     fetch('/api/containers')
@@ -74,7 +85,24 @@ function App() {
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data)
       if (message.type === 'containers') {
+        const incomingIds = new Set(message.data.map(c => c.id))
+        const brandNew = new Set([...incomingIds].filter(id => !prevContainerIdsRef.current.has(id)))
+        
+        if (brandNew.size > 0) {
+          setNewContainerIds(brandNew)
+          // Store all currently known IDs
+          prevContainerIdsRef.current = new Set([...prevContainerIdsRef.current, ...incomingIds])
+          // Clear "new" status after animation time
+          setTimeout(() => setNewContainerIds(new Set()), 3000)
+        } else {
+          // Just update the tracking ref with current state regardless of novelty
+          prevContainerIdsRef.current = incomingIds
+        }
+
         setContainers(message.data)
+        if (message.clusters) setAiClusters(message.clusters)
+        if (message.incidents) setAiIncidents(message.incidents)
+        if (message.ai_insight) setAiInsight(message.ai_insight)
       }
     }
 
@@ -104,23 +132,55 @@ function App() {
     setHighlightedNetwork(active ? container.network : null)
   }, [])
 
+  const handleSendMessage = async (message) => {
+    const userMsg = { role: 'user', content: message };
+    setChatHistory(prev => [...prev, userMsg]);
+    
+    try {
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          history: chatHistory
+        })
+      });
+      
+      const data = await response.json();
+      const aiMsg = { role: 'assistant', content: data.message };
+      setChatHistory(prev => [...prev, aiMsg]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: "Connection interupted. NebulaAI link lost." }]);
+    }
+  };
+
+  const displayContainers = useMemo(() => {
+    return containers.map(c => ({
+      ...c,
+      isNew: newContainerIds.has(c.id)
+    }))
+  }, [containers, newContainerIds])
+
   const starColors = useMemo(() => {
-    return containers.map(c => {
+    return displayContainers.map(c => {
       const cpu = c.cpu_percent || 0
       const memory = c.memory_percent || 0
       if (cpu > 70 || memory > 80) return '#ff2222'
       if (cpu > 40 || memory > 50) return '#ffaa44'
       return '#0d8888'
     })
-  }, [containers])
+  }, [displayContainers])
 
   return (
     <div className="app">
       <div className="header">
-        <h1>NebulaOps</h1>
-        <div className="status">
-          <span className={`dot ${connected ? 'connected' : ''}`}></span>
-          {connected ? `${containers.length} containers` : 'Connecting...'}
+        <div className="brand-container">
+          <h1>NebulaOps</h1>
+          <div className="status">
+            <span className={`dot ${connected ? 'connected' : ''}`}></span>
+            {connected ? `${containers.length} nodes active` : 'Establishing Uplink...'}
+          </div>
         </div>
       </div>
       
@@ -140,13 +200,18 @@ function App() {
         <DustCloud starColors={starColors} />
         
         <Galaxy 
-          containers={containers} 
+          containers={displayContainers} 
           onSelect={handleSelectContainer}
           selectedId={selectedContainer?.id}
           highlightedNetwork={highlightedNetwork}
           onWarpTo={handleWarpTo}
           onToggleConstellation={handleToggleConstellation}
           onOpenBridge={setActiveBridge}
+          clusters={aiClusters}
+          incidents={aiIncidents}
+          aiInsight={aiInsight}
+          onCopilotClick={() => setIsChatOpen(!isChatOpen)}
+          isChatOpen={isChatOpen}
         />
         
         <CameraController targetPosition={warpTarget} enabled={isWarping} />
@@ -178,6 +243,16 @@ function App() {
           onClose={() => setActiveBridge(null)} 
         />
       )}
+
+      <AICopilotChat 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)}
+        history={chatHistory}
+        onSendMessage={handleSendMessage}
+      />
+
+
+      <AIArchitectureExplainer />
     </div>
   )
 }

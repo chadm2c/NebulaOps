@@ -9,6 +9,8 @@ const HolographicHUD = ({ container, onClose, onWarpTo, onToggleConstellation, h
   const [showTerminal, setShowTerminal] = useState(false)
   const [terminalOutput, setTerminalOutput] = useState([])
   const [terminalInput, setTerminalInput] = useState('')
+  const [aiSummary, setAiSummary] = useState('')
+  const [isSummarizing, setIsSummarizing] = useState(false)
   
   const docker = useDocker()
   const logsEndRef = useRef(null)
@@ -40,6 +42,16 @@ const HolographicHUD = ({ container, onClose, onWarpTo, onToggleConstellation, h
     
     if (activeTab === 'volumes') {
       docker.fetchVolumes(container.id)
+    }
+
+    if (activeTab === 'ai') {
+      setIsSummarizing(true)
+      fetch(`/api/containers/${container.id}/ai-logs`)
+        .then(res => res.json())
+        .then(data => {
+          setAiSummary(data.summary)
+          setIsSummarizing(false)
+        })
     }
 
     return () => {
@@ -164,6 +176,50 @@ const HolographicHUD = ({ container, onClose, onWarpTo, onToggleConstellation, h
             ))}
           </div>
         )
+      case 'ai':
+        return (
+          <div style={{ padding: '10px' }}>
+            <div style={{ 
+              color: '#00f2ff', 
+              fontSize: '12px', 
+              fontWeight: 'bold', 
+              marginBottom: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Terminal size={14} /> AI SITUATION REPORT
+            </div>
+            {isSummarizing ? (
+              <div className="summarizing-loader">
+                <RefreshCw className="spin" size={20} />
+                <span>Aggregating log streams...</span>
+              </div>
+            ) : (
+              <div style={{ 
+                color: '#fff', 
+                fontSize: '11px', 
+                lineHeight: '1.6',
+                fontFamily: 'monospace',
+                background: 'rgba(0, 242, 255, 0.05)',
+                padding: '12px',
+                borderLeft: '2px solid #00f2ff',
+                whiteSpace: 'pre-wrap'
+              }}>
+                {aiSummary}
+              </div>
+            )}
+            
+            <div style={{ marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>
+               <div style={{ color: '#ff851b', fontSize: '10px', fontWeight: 'bold', marginBottom: '8px' }}>ANOMALY SCAN</div>
+               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '9px' }}>
+                 {container.cpu_percent > 80 ? 
+                  "CRITICAL: CPU jitter detected. Thread starvation likely." : 
+                  "Nominal: Periodic resource sweep complete. No jitter detected."}
+               </div>
+            </div>
+          </div>
+        )
       default: return null
     }
   }
@@ -256,8 +312,9 @@ const HolographicHUD = ({ container, onClose, onWarpTo, onToggleConstellation, h
          <div className="sensor-tabs">
             <button className={`sensor-tab ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}><Terminal size={12} style={{marginRight: '4px', verticalAlign: 'middle'}}/>Logs</button>
             <button className={`sensor-tab ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><Activity size={12} style={{marginRight: '4px', verticalAlign: 'middle'}}/>Stats</button>
-            <button className={`sensor-tab ${activeTab === 'inspect' ? 'active' : ''}`} onClick={() => setActiveTab('inspect')}><FileText size={12} style={{marginRight: '4px', verticalAlign: 'middle'}}/>Inspect</button>
-            <button className={`sensor-tab ${activeTab === 'volumes' ? 'active' : ''}`} onClick={() => setActiveTab('volumes')}><Database size={12} style={{marginRight: '4px', verticalAlign: 'middle'}}/>Vols</button>
+             <button className={`sensor-tab ${activeTab === 'inspect' ? 'active' : ''}`} onClick={() => setActiveTab('inspect')}><FileText size={12} style={{marginRight: '4px', verticalAlign: 'middle'}}/>Inspect</button>
+             <button className={`sensor-tab ${activeTab === 'volumes' ? 'active' : ''}`} onClick={() => setActiveTab('volumes')}><Database size={12} style={{marginRight: '4px', verticalAlign: 'middle'}}/>Vols</button>
+             <button className={`sensor-tab ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => setActiveTab('ai')}><Info size={12} style={{marginRight: '4px', verticalAlign: 'middle'}}/>AI</button>
          </div>
          <div className="sensor-content">
             {showTerminal ? (
