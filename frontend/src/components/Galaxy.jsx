@@ -6,7 +6,7 @@ import NetworkConnection from './NetworkConnection'
 import ConstellationLines from './ConstellationLines'
 import AICopilotDrone from './AICopilotDrone'
 
-function Galaxy({ containers, onSelect, selectedId, highlightedNetwork, onWarpTo, onToggleConstellation, onOpenBridge, clusters, incidents, aiInsight, onCopilotClick, isChatOpen }) {
+function Galaxy({ containers, onSelect, selectedId, onOpenBridge, clusters, incidents, aiInsight, onCopilotClick, isChatOpen }) {
   const groupRef = useRef()
   const positionsRef = useRef({})
   const [comets, setComets] = useState([])
@@ -80,8 +80,6 @@ function Galaxy({ containers, onSelect, selectedId, highlightedNetwork, onWarpTo
           z: Math.sin((index / Math.max(containers.length, 1)) * Math.PI * 2) * 8
         }
         
-        const isHighlighted = highlightedNetwork && container.network === highlightedNetwork
-        
         return (
           <ContainerStar
             key={container.id}
@@ -89,10 +87,7 @@ function Galaxy({ containers, onSelect, selectedId, highlightedNetwork, onWarpTo
             position={[pos.x, pos.y, pos.z]}
             onSelect={onSelect}
             selectedId={selectedId}
-            onWarpTo={onWarpTo}
-            onToggleConstellation={onToggleConstellation}
             onOpenBridge={onOpenBridge}
-            highlightedNetwork={isHighlighted ? container.network : null}
             incident={incidents?.find(inc => inc.container_id === container.id)}
           />
         )

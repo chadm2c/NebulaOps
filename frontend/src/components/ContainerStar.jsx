@@ -146,7 +146,7 @@ const coronaFragmentShader = `
   }
 `
 
-function ContainerStar({ container, position, onSelect, selectedId, onWarpTo, onToggleConstellation, highlightedNetwork, onOpenBridge, incident }) {
+function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge, incident }) {
   const meshRef = useRef()
   const coronaRef = useRef()
   const materialRef = useRef()
@@ -288,14 +288,11 @@ function ContainerStar({ container, position, onSelect, selectedId, onWarpTo, on
             {selectedId === container.id ? (
                <div style={{ pointerEvents: 'auto' }}>
                  <HolographicHUD 
-                   key="hud"
-                   container={container} 
-                   onClose={() => onSelect(null)} 
-                   onWarpTo={onWarpTo}
-                   onToggleConstellation={onToggleConstellation}
-                   highlightedNetwork={highlightedNetwork}
-                   onOpenBridge={onOpenBridge}
-                 />
+                    key="hud"
+                    container={container} 
+                    onClose={() => onSelect(null)} 
+                    onOpenBridge={onOpenBridge}
+                  />
                </div>
             ) : (
               <div style={{

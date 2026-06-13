@@ -2,7 +2,7 @@
 
 > **NebulaOps** is an real-time 3D infrastructure explorer that transforms fractionalized container dashboards into a navigable, interactive galaxy.
 
-![NebulaOps Galaxy View](docs/assets/galaxy-view.png) *(Placeholder for Galaxy View)*
+![NebulaOps Galaxy View](docs/galaxy.png) *(Placeholder for Galaxy View)*
 
 Traditional observability tools overwhelm engineers with flat metrics and fragmented logs. NebulaOps solves this by projecting your entire Docker infrastructure into a spatial environment—turning containers into stars, networks into constellations, and anomalies into black holes. Get a visual mental model of your cluster, instantly understand service topology, and interactively debug infrastructure issues directly from a high-fidelity 3D HUD.
 
@@ -23,17 +23,27 @@ Traditional observability tools overwhelm engineers with flat metrics and fragme
 ### 🛠️ Interactive Command & Control
 - **Tactical HUD Controls:** Click on any star to invoke a tactical menu. Directly Start, Stop, Kill, Restart, Pause, and Unpause containers without leaving the 3D environment.
 - **Sensor Suite:** Detailed per-container inspection panel streaming live CPU/Memory telemetry, active network activity, Docker inspect metadata, volumes, and trailing logs.
+
+![Interactive Command & Control](docs/panel.png) *(Placeholder for Interactive Command & Control)*
+
 - **Remote Bridge Shell:** Open a fully styled, embedded `xterm.js` terminal connecting directly (`bash`/`sh`) into the container via WebSocket for immediate real-time debugging.
 
-![Remote Bridge Platform](docs/assets/remote-bridge.png) *(Placeholder for Remote Bridge Shell)*
+![Remote Bridge Platform](docs/terminal.png) *(Placeholder for Remote Bridge Shell)*
 
 ### 🧠 AI-Powered "Neural" Intelligence
 - **AI Constellation Mapper:** Automatically groups containers into logical service clusters (constellations) based on shared networks and communication patterns.
+
+![AI Intelligence](docs/constellation.png) *(AI Constellation Mapper)*
+
 - **Incident Detection & Analysis:** Actively monitors for CPU/Memory spikes, presenting anomalies visually as black holes and analyzing them for root cause hints.
 - **AI DevOps Copilot:** A floating spatial AI drone object you can interact with. Ask questions like *"Why is my API latency spiking?"* and it will scan live metrics, logs, and relationships to provide contextual answers.
-- **Log Summarization:** Instantly parse thousands of trailing log lines into a plain-English situation report via AI.
 
-![AI Intelligence](docs/assets/ai-intelligence.png) *(Placeholder for AI Copilot / Intelligence)*
+![AI Intelligence](docs/ai_copilot.png) *(Placeholder for AI Copilot)*
+
+- **Log Summarization:** Instantly parse thousands of trailing log lines into a plain-English situation report via AI.
+- **AI Galaxy Explainer:** Click "ANALYZE GALAXY" to generate a comprehensive LLM-powered overview of your entire infrastructure topology, including service relationships, health assessments, and architectural insights.
+
+![AI Intelligence](docs/explainer.png) *(Placeholder for AI Galaxy Explainer)*
 
 ---
 
@@ -57,7 +67,7 @@ NebulaOps includes a **Transparent Demo Mode** for users who want to explore the
 
 1. **Clone & Enter:**
    ```bash
-   git clone https://github.com/yourusername/nebulaops.git
+   git clone https://github.com/chadm2c/nebulaops.git
    cd nebulaops
    ```
 

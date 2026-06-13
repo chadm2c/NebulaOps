@@ -15,12 +15,14 @@ function AICopilotChat({ isOpen, onClose, history, onSendMessage }) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isTyping) return;
     
-    onSendMessage(input);
+    setIsTyping(true);
     setInput('');
+    await onSendMessage(input);
+    setIsTyping(false);
   };
 
   return (
@@ -73,6 +75,30 @@ function AICopilotChat({ isOpen, onClose, history, onSendMessage }) {
           background: rgba(0, 242, 255, 0.3);
           border-radius: 4px;
         }
+        .typing-indicator {
+          align-self: flex-start;
+          display: flex;
+          gap: 6px;
+          padding: 14px 18px;
+          background: #0a1520;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          margin-bottom: 12px;
+          max-width: 80%;
+        }
+        .typing-dot {
+          width: 8px;
+          height: 8px;
+          background: #00f2ff;
+          border-radius: 50%;
+          animation: typingBounce 1.4s ease-in-out infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingBounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30% { transform: translateY(-8px); opacity: 1; }
+        }
       `}</style>
 
       {/* Header */}
@@ -124,6 +150,13 @@ function AICopilotChat({ isOpen, onClose, history, onSendMessage }) {
             {msg.content}
           </div>
         ))}
+        {isTyping && (
+          <div className="typing-indicator">
+            <div className="typing-dot" />
+            <div className="typing-dot" />
+            <div className="typing-dot" />
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 

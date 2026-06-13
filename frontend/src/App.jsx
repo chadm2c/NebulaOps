@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { EffectComposer, Bloom, Noise, Vignette } from '@react-three/postprocessing'
 import Galaxy from './components/Galaxy'
@@ -10,54 +10,10 @@ import AIArchitectureExplainer from './components/AIArchitectureExplainer'
 import AICopilotChat from './components/AICopilotChat'
 import './App.css'
 
-function CameraController({ targetPosition, enabled }) {
-  const { camera, controls } = useThree()
-  const targetRef = useRef(null)
-  
-  useEffect(() => {
-    if (enabled && targetPosition) {
-      targetRef.current = {
-        x: targetPosition.x,
-        y: targetPosition.y,
-        z: targetPosition.z
-      }
-    }
-  }, [targetPosition, enabled])
-  
-  useFrame((state, delta) => {
-    if (enabled && targetRef.current) {
-      const target = targetRef.current
-      const t = 1 - Math.pow(0.001, delta)
-      
-      const currentTarget = controls?.target || { x: 0, y: 0, z: 0 }
-      controls.target.x = currentTarget.x + (target.x - currentTarget.x) * t
-      controls.target.y = currentTarget.y + (target.y - currentTarget.y) * t
-      controls.target.z = currentTarget.z + (target.z - currentTarget.z) * t
-      
-      const desiredCamPos = {
-        x: target.x + 8,
-        y: target.y + 5,
-        z: target.z + 8
-      }
-      
-      camera.position.x += (desiredCamPos.x - camera.position.x) * t
-      camera.position.y += (desiredCamPos.y - camera.position.y) * t
-      camera.position.z += (desiredCamPos.z - camera.position.z) * t
-      
-      controls.update()
-    }
-  })
-  
-  return null
-}
-
 function App() {
   const [containers, setContainers] = useState([])
   const [selectedContainer, setSelectedContainer] = useState(null)
   const [connected, setConnected] = useState(false)
-  const [warpTarget, setWarpTarget] = useState(null)
-  const [isWarping, setIsWarping] = useState(false)
-  const [highlightedNetwork, setHighlightedNetwork] = useState(null)
   const [activeBridge, setActiveBridge] = useState(null)
   const [aiClusters, setAiClusters] = useState([])
   const [aiIncidents, setAiIncidents] = useState([])
@@ -118,18 +74,6 @@ function App() {
 
   const handleClosePanel = useCallback(() => {
     setSelectedContainer(null)
-  }, [])
-
-  const handleWarpTo = useCallback((container) => {
-    if (container?.position) {
-      setWarpTarget(container.position)
-      setIsWarping(true)
-      setTimeout(() => setIsWarping(false), 2000)
-    }
-  }, [])
-
-  const handleToggleConstellation = useCallback((container, active) => {
-    setHighlightedNetwork(active ? container.network : null)
   }, [])
 
   const handleSendMessage = async (message) => {
@@ -203,9 +147,6 @@ function App() {
           containers={displayContainers} 
           onSelect={handleSelectContainer}
           selectedId={selectedContainer?.id}
-          highlightedNetwork={highlightedNetwork}
-          onWarpTo={handleWarpTo}
-          onToggleConstellation={handleToggleConstellation}
           onOpenBridge={setActiveBridge}
           clusters={aiClusters}
           incidents={aiIncidents}
@@ -213,8 +154,6 @@ function App() {
           onCopilotClick={() => setIsChatOpen(!isChatOpen)}
           isChatOpen={isChatOpen}
         />
-        
-        <CameraController targetPosition={warpTarget} enabled={isWarping} />
         
         <OrbitControls 
           enablePan={true}

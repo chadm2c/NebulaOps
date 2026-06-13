@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Square, RefreshCw, PowerOff, Pause, Activity, FileText, Database, Info, Crosshair, Terminal, Network, GitBranch, X } from 'lucide-react'
+import { Play, Square, RefreshCw, PowerOff, Pause, Activity, FileText, Database, Info, Terminal, GitBranch, X } from 'lucide-react'
 import { useDocker } from '../hooks/useDocker'
 import './HolographicHUD.css'
 
-const HolographicHUD = ({ container, onClose, onWarpTo, onToggleConstellation, highlightedNetwork, onOpenBridge }) => {
+const HolographicHUD = ({ container, onClose, onOpenBridge }) => {
   const [activeTab, setActiveTab] = useState('stats')
   const [showTerminal, setShowTerminal] = useState(false)
   const [terminalOutput, setTerminalOutput] = useState([])
@@ -224,20 +224,9 @@ const HolographicHUD = ({ container, onClose, onWarpTo, onToggleConstellation, h
     }
   }
 
-  const handleWarp = (e) => {
-    e.stopPropagation()
-    onWarpTo(container)
-  }
-
   const handleRemote = (e) => {
     e.stopPropagation()
     onOpenBridge(container)
-  }
-
-  const handleConstellation = (e) => {
-    e.stopPropagation()
-    const isActive = highlightedNetwork === container.network
-    onToggleConstellation(container, !isActive)
   }
 
   const handleOrigin = (e) => {
@@ -347,16 +336,10 @@ const HolographicHUD = ({ container, onClose, onWarpTo, onToggleConstellation, h
       </div>
 
       <div className="nav-actions" onClick={(e) => e.stopPropagation()}>
-         <div className="nav-btn" onClick={handleWarp}>
-           <Crosshair size={14} /> Warp Drive
-         </div>
          <div className={`nav-btn ${showTerminal ? 'active' : ''}`} onClick={handleRemote}>
-           <Terminal size={14} /> Remote Bridge
-         </div>
-         <div className={`nav-btn ${highlightedNetwork === container.network ? 'active' : ''}`} onClick={handleConstellation}>
-           <Network size={14} /> Constellation
-         </div>
-         <div className="nav-btn" onClick={handleOrigin}>
+            <Terminal size={14} /> Remote Bridge
+          </div>
+          <div className="nav-btn" onClick={handleOrigin}>
            <GitBranch size={14} /> Origin Trace
          </div>
       </div>

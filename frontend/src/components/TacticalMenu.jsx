@@ -15,9 +15,7 @@ const quickRingActions = [
 ]
 
 const navButtons = [
-  { id: 'warp', icon: '🚀', label: 'Warp Drive', action: 'warp' },
   { id: 'terminal', icon: '⌨', label: 'Remote Bridge', action: 'terminal' },
-  { id: 'constellation', icon: '🔗', label: 'Constellation', action: 'constellation' },
   { id: 'origin', icon: '📦', label: 'Origin Trace', action: 'origin' },
 ]
 
@@ -52,15 +50,10 @@ const ringItemVariants = {
 
 export default function TacticalMenu({ 
   container, 
-  onClose, 
-  onWarpTo,
-  onToggleConstellation,
-  highlightedNetwork 
+  onClose
 }) {
   const [activeTab, setActiveTab] = useState('stats')
   const [showSensorPanel, setShowSensorPanel] = useState(false)
-  const [constellationActive, setConstellationActive] = useState(highlightedNetwork)
-  
   const {
     loading,
     error,
@@ -135,15 +128,8 @@ export default function TacticalMenu({
 
   const handleNav = (action) => {
     switch (action) {
-      case 'warp':
-        onWarpTo?.(container)
-        break
       case 'terminal':
         window.open(`/terminal/${container.id}`, '_blank')
-        break
-      case 'constellation':
-        setConstellationActive(!constellationActive)
-        onToggleConstellation?.(container, !constellationActive)
         break
       case 'origin':
         const imageName = container.image
@@ -225,7 +211,7 @@ export default function TacticalMenu({
           {navButtons.map((nav) => (
             <button
               key={nav.id}
-              className={`nav-btn ${nav.id === 'constellation' && constellationActive ? 'active' : ''}`}
+              className="nav-btn"
               onClick={() => handleNav(nav.action)}
               title={nav.label}
             >
