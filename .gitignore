@@ -1,6 +1,7 @@
 # Documentation
 nebulaops_prd.md
 ai_prd.md
+nebulaops_presentation.*
 
 # OS Files
 .DS_Store
@@ -57,3 +58,6 @@ docker-compose.override.yml
 # Temporary files
 tmp/
 temp/
+
+.env
+venv/

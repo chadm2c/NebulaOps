@@ -2,27 +2,27 @@ version: '3.8'
 
 services:
   backend:
+    image: chadmany20/nebulaops-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./backend/app:/app/app
     environment:
-      - DOCKER_HOST=unix:///var/run/docker.sock
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     networks:
       - nebulaops
 
   frontend:
+    image: chadmany20/nebulaops-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8000
+      - "127.0.0.1:80:80"
     depends_on:
       - backend
     networks:

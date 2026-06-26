@@ -15,6 +15,7 @@ const RemoteBridge = ({ container, onClose }) => {
   const fitAddonRef = useRef(null)
   const terminalSessionRef = useRef(null)
   const [bootStatus, setBootStatus] = useState('scanning') // scanning, unfolding, connected
+  const [sessionAlive, setSessionAlive] = useState(false)
   const docker = useDocker()
 
   // CPU/RAM stats from useDocker
@@ -67,6 +68,7 @@ const RemoteBridge = ({ container, onClose }) => {
       // Initialize WebSocket Session with immediate callbacks
       const session = docker.openTerminal(container.id, {
         onOpen: () => {
+          setSessionAlive(true)
           term.write('\r\n\x1b[1;32m> BRIDGE ACTIVATED. PTY LINK ESTABLISHED.\x1b[0m\r\n\r\n')
           // Focus again just in case
           term.focus()
@@ -75,10 +77,12 @@ const RemoteBridge = ({ container, onClose }) => {
           term.write(data)
         },
         onError: (err) => {
+          setSessionAlive(false)
           term.write('\r\n\x1b[1;31m> CRITICAL ERROR: PTY MOUNT FAILED. CHECKING KERNEL...\x1b[0m\r\n')
           console.error("Terminal WebSocket Error:", err)
         },
         onClose: () => {
+          setSessionAlive(false)
           term.write('\r\n\x1b[1;33m> LINK TERMINATED.\x1b[0m\r\n')
         }
       })
@@ -86,8 +90,19 @@ const RemoteBridge = ({ container, onClose }) => {
       terminalSessionRef.current = session
 
       term.onData(data => {
-        console.log("Terminal Input:", data)
-        session.send(data)
+        const sent = session.send(data)
+        if (!sent) {
+          // Local echo fallback: show typing when WebSocket is not connected
+          if (data === '\x7f' || data === '\b') {
+            if (term.buffer.active.cursorX > 0) {
+              term.write('\b \b')
+            }
+          } else if (data === '\r') {
+            term.write('\r\n')
+          } else {
+            term.write(data)
+          }
+        }
       })
 
       // Add click listener to re-focus terminal
@@ -204,8 +219,10 @@ const RemoteBridge = ({ container, onClose }) => {
           <section className="command-history">
             <div className="history-title">SESSION METRICS</div>
             <div className="history-list">
-               <div className="history-item">STATUS: CONNECTED</div>
-               <div className="history-item">PTY: REALTIME</div>
+               <div className="history-item" style={{ borderLeftColor: sessionAlive ? '#00ff88' : '#ff4444' }}>
+                 STATUS: {sessionAlive ? 'CONNECTED' : 'DISCONNECTED'}
+               </div>
+               <div className="history-item">PTY: {sessionAlive ? 'REALTIME' : 'OFFLINE'}</div>
                <div className="history-item">ID: {container.id}</div>
             </div>
           </section>

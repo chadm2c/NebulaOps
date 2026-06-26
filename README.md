@@ -52,18 +52,24 @@ Traditional observability tools overwhelm engineers with flat metrics and fragme
 NebulaOps includes a **Transparent Demo Mode** for users who want to explore the interface without a running Docker daemon.
 
 - **Automatic Fallback:** If the backend cannot connect to a `/var/run/docker.sock`, it automatically initializes a high-fidelity mock infrastructure (simulating varied loads and services).
-- **Zero Configuration:** Simply run the containers, and if no host socket is detected, the demo galaxy is born.
+- **Zero Configuration:** Simply start the app with no Docker daemon needed — the demo galaxy spawns automatically.
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- **Node.js** (v18+) and **Python** (3.9+)
-- **Windows Users:** You MUST have **Docker Desktop** installed and running. Ensure "Use the WSL 2 based engine" is enabled for best performance.
-- **AI Features:** An **OpenAI API Key** or a **GitHub Token** (optional).
+NebulaOps has a **built-in demo mode** — if no Docker daemon is detected, the backend automatically spawns a simulated galaxy with mock containers. You can explore the full UI without any infrastructure.
 
-### Installation
+### Prerequisites
+- **Node.js** (v18+) and **Python** (3.9+) — for manual dev.
+- **Docker** (Docker Desktop on Windows with WSL2 backend) — for Docker Compose or Docker Hub paths.
+- **AI Features:** A **GitHub Token** (free via GitHub Models) or **OpenAI API Key** (optional).
+
+---
+
+### 🛠️ Option A: Manual Development
+
+Run backend and frontend separately for hot-reload. **No Docker daemon required** — demo mode kicks in automatically.
 
 1. **Clone & Enter:**
    ```bash
@@ -72,23 +78,24 @@ NebulaOps includes a **Transparent Demo Mode** for users who want to explore the
    ```
 
 2. **AI Setup (Optional):**
-   Create `backend/.env` to enable the Copilot and Log Summarization:
+   Create `backend/.env`:
    ```env
-   OPENAI_API_KEY=your_openai_key_here
+   GITHUB_TOKEN=ghp_your_github_token
+   # or
+   OPENAI_API_KEY=sk_your_openai_key
    ```
 
-3. **Start the Backend:**
-   Open a new terminal and run:
+3. **Start the Backend** (terminal 1):
    ```bash
    cd backend
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   # Windows: venv\Scripts\activate
+   source venv/bin/activate
    pip install -r requirements.txt
    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
-4. **Start the Frontend:**
-   Open another terminal and run:
+4. **Start the Frontend** (terminal 2):
    ```bash
    cd frontend
    npm install
@@ -96,8 +103,85 @@ NebulaOps includes a **Transparent Demo Mode** for users who want to explore the
    ```
 
 5. **Explore:**
-   - **HUD Interface:** [http://localhost:5173](http://localhost:5173) *(Default Vite port)*
+   - **HUD Interface:** [http://localhost:3000](http://localhost:3000)
    - **Backend API:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+   The Vite dev server proxies `/api` and WebSocket requests to the backend automatically.
+
+---
+
+### 🏗️ Option B: Build Locally with Docker Compose
+
+Clone, build, and run from source. **Works with or without a Docker daemon** — demo mode auto-falls back.
+
+1. **Clone & Enter:**
+   ```bash
+   git clone https://github.com/chadm2c/nebulaops.git
+   cd nebulaops
+   ```
+
+2. **AI Setup (Optional):**
+   Create `.env` in the project root:
+   ```env
+   GITHUB_TOKEN=ghp_your_github_token
+   # or
+   OPENAI_API_KEY=sk_your_openai_key
+   ```
+
+3. **Launch:**
+   ```bash
+   docker compose up
+   ```
+
+4. **Explore:**
+   - **HUD Interface:** [http://localhost:80](http://localhost:80)
+   - **Backend API:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+### 🐳 Option C: Run from Docker Hub (Simplest)
+
+No clone or build needed. Just pull and run:
+
+```bash
+# Pull the images
+docker pull chadmany20/nebulaops-backend:latest
+docker pull chadmany20/nebulaops-frontend:latest
+
+# Create a network
+docker network create nebulaops
+
+# AI Setup (Optional): create .env with your token
+echo "GITHUB_TOKEN=ghp_your_github_token" > .env
+# or: echo "OPENAI_API_KEY=sk_your_openai_key" >> .env
+
+# Pick ONE backend command below — running both will conflict on port 8000
+
+# Without AI features (skip if you created .env):
+# docker run -d --name nebulaops-backend \
+#   --network nebulaops \
+#   -p 127.0.0.1:8000:8000 \
+#   -v /var/run/docker.sock:/var/run/docker.sock \
+#   chadmany20/nebulaops-backend:latest
+
+# With AI features (requires .env with tokens):
+docker run -d --name nebulaops-backend \
+  --network nebulaops \
+  -p 127.0.0.1:8000:8000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --env-file .env \
+  chadmany20/nebulaops-backend:latest
+
+# Start the frontend
+docker run -d --name nebulaops-frontend \
+  --network nebulaops \
+  -p 127.0.0.1:80:80 \
+  chadmany20/nebulaops-frontend:latest
+
+# Open http://localhost:80
+```
+
+No Docker daemon? Demo mode fires up automatically with simulated containers.
 
 ---
 
@@ -127,12 +211,12 @@ While NebulaOps already provides a robust visual DevOps experience, the followin
   - Ensure Docker Desktop is running.
   - Check your volume mounts in `docker-compose.yml`. You must mount the system boundary `/var/run/docker.sock` to the backend.
   - If you encounter permission errors on Linux, ensure your user is in the `docker` group, or provide specific ACLs to the mounted socket.
-- **AI Link Offline / "Summarization Failed":** Ensure your `.env` file is located precisely in the `backend/` folder and the API key is active/funded.
+- **AI Link Offline / "Summarization Failed":** Ensure your `.env` file is set up correctly — place it in the **project root** if using Docker Compose, or in `backend/` for manual dev. Make sure the API key is active/funded.
 
 ## 🛡️ Security
 
 NebulaOps requires **highly privileged access** (`docker.sock`) for real-time monitoring and terminal access. 
-⚠️ **NEVER expose the NebulaOps port (3000/8000) to the public internet** without a rigorous reverse proxy, VPN, and robust authentication layer. Read-only capability scaling is under development.
+⚠️ **NEVER expose the NebulaOps ports (80/8000) to the public internet** without a rigorous reverse proxy, VPN, and robust authentication layer. Read-only capability scaling is under development.
 
 ## 📜 License
 MIT License - See [LICENSE](LICENSE) for details.

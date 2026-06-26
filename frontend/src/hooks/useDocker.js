@@ -1,7 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || ''
+
+function getWsHost() {
+  return API_URL ? API_URL.replace(/^https?:\/\//, '') : window.location.host
+}
 
 let socket = null
 
@@ -76,8 +80,7 @@ export function useDocker() {
 
   const streamLogs = useCallback((containerId) => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const apiHost = API_URL.replace(/^https?:\/\//, '')
-    const ws = new WebSocket(`${wsProtocol}//${apiHost}/ws/logs/${containerId}`)
+    const ws = new WebSocket(`${wsProtocol}//${getWsHost()}/ws/logs/${containerId}`)
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
@@ -109,8 +112,7 @@ export function useDocker() {
 
   const streamStats = useCallback((containerId) => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const apiHost = API_URL.replace(/^https?:\/\//, '')
-    const ws = new WebSocket(`${wsProtocol}//${apiHost}/ws/stats/${containerId}`)
+    const ws = new WebSocket(`${wsProtocol}//${getWsHost()}/ws/stats/${containerId}`)
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
@@ -175,8 +177,7 @@ export function useDocker() {
 
   const openTerminal = useCallback((containerId, callbacks = {}) => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const apiHost = API_URL.replace(/^https?:\/\//, '')
-    const wsUrl = `${wsProtocol}//${apiHost}/ws/terminal/${containerId}`
+    const wsUrl = `${wsProtocol}//${getWsHost()}/ws/terminal/${containerId}`
     
     const ws = new WebSocket(wsUrl)
     
@@ -199,7 +200,9 @@ export function useDocker() {
       send: (data) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(data)
+          return true
         }
+        return false
       },
       close: () => ws.close()
     }

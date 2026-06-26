@@ -35,8 +35,7 @@ function App() {
       .catch(err => console.error('Failed to fetch containers:', err))
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const apiHost = 'localhost:8000' // Should match backend port
-    const ws = new WebSocket(`${wsProtocol}//${apiHost}/ws`)
+    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`)
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data)

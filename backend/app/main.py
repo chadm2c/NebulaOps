@@ -222,6 +222,18 @@ async def startup_event():
     print("Startup: Checking Docker connection...")
     get_docker_client()
 
+    if not os.getenv("GITHUB_TOKEN") and not os.getenv("OPENAI_API_KEY"):
+        print("=" * 50)
+        print("NebulaAI Copilot is offline.")
+        print("To enable AI features, create a file named '.env'")
+        print("in the project root (next to docker-compose.yml):")
+        print("")
+        print("  GITHUB_TOKEN=ghp_your_github_token")
+        print("")
+        print("Then run: docker compose down && docker compose up")
+        print("See backend/.env.example for details.")
+        print("=" * 50)
+
 @app.get("/api/containers")
 async def get_containers():
     real_containers = get_real_containers()

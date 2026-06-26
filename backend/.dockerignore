@@ -10,4 +10,8 @@ pip-log.txt
 pip-delete-this-directory.txt
 .git
 .gitignore
+.env
 *.log
+
+diag_docker.py
+test_docker.py
