@@ -509,6 +509,33 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
         sock = client.api.exec_start(exec_id, detach=False, tty=True, socket=True)
         print(f"Socket obtained for {container_id}: {type(sock)}")
         
+        # [Fix #4] Cache socket read/write methods once (not on every poll iteration)
+        if hasattr(sock, 'recv'):
+            if hasattr(sock, 'settimeout'):
+                sock.settimeout(0.05)
+            sock_read = sock.recv
+        elif hasattr(sock, 'read'):
+            sock_read = sock.read
+        elif hasattr(sock, '_sock') and hasattr(sock._sock, 'recv'):
+            if hasattr(sock._sock, 'settimeout'):
+                sock._sock.settimeout(0.05)
+            sock_read = sock._sock.recv
+        else:
+            await websocket.send_text("Error: Cannot determine socket read method")
+            await websocket.close()
+            return
+
+        if hasattr(sock, 'send'):
+            sock_write = sock.send
+        elif hasattr(sock, 'write'):
+            sock_write = sock.write
+        elif hasattr(sock, '_sock') and hasattr(sock._sock, 'send'):
+            sock_write = sock._sock.send
+        else:
+            await websocket.send_text("Error: Cannot determine socket write method")
+            await websocket.close()
+            return
+        
         stop_event = threading.Event()
         socket_closed = False
         
@@ -521,25 +548,11 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
         def socket_to_ws():
             nonlocal socket_closed
             try:
-                # Set a much shorter timeout for snappy terminal response
-                if hasattr(sock, 'settimeout'):
-                    sock.settimeout(0.05)
-                elif hasattr(sock, '_sock') and hasattr(sock._sock, 'settimeout'):
-                    sock._sock.settimeout(0.05)
-                
                 while not stop_event.is_set():
                     try:
-                        # Some docker-py versions use .recv, others .read or ._sock.recv
-                        data = None
-                        if hasattr(sock, 'recv'):
-                            data = sock.recv(4096)
-                        elif hasattr(sock, 'read'):
-                            data = sock.read(4096)
-                        elif hasattr(sock, '_sock') and hasattr(sock._sock, 'recv'):
-                            data = sock._sock.recv(4096)
-                            
+                        data = sock_read(4096)
+                        
                         if data:
-                            # print(f"DEBUG: Read {len(data)} bytes from container {container_id}")
                             pass
                         else:
                             if stop_event.is_set(): break
@@ -550,7 +563,7 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
                             websocket.send_bytes(data), 
                             loop
                         )
-                    except (socket.timeout, TimeoutError):
+                    except (socket.timeout, TimeoutError, BlockingIOError):
                         continue
                     except Exception as e:
                         if not stop_event.is_set():
@@ -566,26 +579,30 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
 
         # Send an initial newline to trigger a prompt
         try:
-            if hasattr(sock, 'send'):
-                sock.send(b"\n")
-            elif hasattr(sock, 'write'):
-                sock.write(b"\n")
-            elif hasattr(sock, '_sock') and hasattr(sock._sock, 'send'):
-                sock._sock.send(b"\n")
+            sock_write(b"\n")
         except:
             pass
 
         thread = threading.Thread(target=socket_to_ws, daemon=True)
         thread.start()
 
+        # [Fix #5] Heartbeat task to detect silent disconnects
+        async def heartbeat():
+            try:
+                while True:
+                    await asyncio.sleep(30)
+                    await websocket.send_text("HEARTBEAT")
+            except asyncio.CancelledError:
+                pass
+
+        heartbeat_task = asyncio.create_task(heartbeat())
+
         try:
             while True:
-                # Use more robust receive methods
                 try:
                     data = await websocket.receive_text()
                     payload = data.encode()
                 except RuntimeError:
-                    # Might be binary or disconnect
                     try:
                         payload = await websocket.receive_bytes()
                     except:
@@ -595,27 +612,14 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
 
                 if not socket_closed:
                     try:
-                        print(f"DEBUG: Forwarding {len(payload)} bytes to container {container_id}")
-                        # Prioritize direct send if it's a socket-like object (NpipeSocket/etc)
-                        sent = False
-                        for method in ['send', 'write']:
-                            if hasattr(sock, method):
-                                getattr(sock, method)(payload)
-                                sent = True
-                                break
-                        
-                        if not sent and hasattr(sock, '_sock') and hasattr(sock._sock, 'send'):
-                            sock._sock.send(payload)
-                            sent = True
-                        
-                        if not sent:
-                            print(f"WARNING: Failed to find send method for socket on {container_id}")
+                        sock_write(payload)
                     except Exception as e:
                         print(f"Socket send error for {container_id}: {e}")
         except WebSocketDisconnect:
             print(f"Terminal WebSocket disconnected for {container_id}")
         finally:
             stop_event.set()
+            heartbeat_task.cancel()
             if not socket_closed:
                 try:
                     sock.close()

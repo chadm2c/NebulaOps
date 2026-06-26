@@ -74,6 +74,7 @@ const RemoteBridge = ({ container, onClose }) => {
           term.focus()
         },
         onData: (data) => {
+          if (data === 'HEARTBEAT') return
           term.write(data)
         },
         onError: (err) => {
@@ -89,19 +90,35 @@ const RemoteBridge = ({ container, onClose }) => {
       
       terminalSessionRef.current = session
 
-      term.onData(data => {
-        const sent = session.send(data)
+      // [Fix #2] Input batching: buffer keystrokes and flush every 30ms
+      const inputBuffer = []
+      let flushTimer = null
+
+      const flushInput = () => {
+        if (inputBuffer.length === 0) return
+        const batched = inputBuffer.join('')
+        inputBuffer.length = 0
+        const sent = session.send(batched)
         if (!sent) {
-          // Local echo fallback: show typing when WebSocket is not connected
-          if (data === '\x7f' || data === '\b') {
-            if (term.buffer.active.cursorX > 0) {
-              term.write('\b \b')
+          for (const ch of batched) {
+            if (ch === '\x7f' || ch === '\b') {
+              if (term.buffer.active.cursorX > 0) term.write('\b \b')
+            } else if (ch === '\r') {
+              term.write('\r\n')
+            } else {
+              term.write(ch)
             }
-          } else if (data === '\r') {
-            term.write('\r\n')
-          } else {
-            term.write(data)
           }
+        }
+      }
+
+      term.onData(data => {
+        inputBuffer.push(data)
+        if (!flushTimer) {
+          flushTimer = setTimeout(() => {
+            flushTimer = null
+            flushInput()
+          }, 30)
         }
       })
 
@@ -112,6 +129,10 @@ const RemoteBridge = ({ container, onClose }) => {
       window.addEventListener('resize', () => fitAddon.fit())
       
       return () => {
+        if (flushTimer) {
+          clearTimeout(flushTimer)
+          flushInput()
+        }
         terminalRef.current?.removeEventListener('click', handleClick)
         session.close()
         term.dispose()
