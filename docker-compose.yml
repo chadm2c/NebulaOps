@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   backend:
+    container_name: nebulaops-backend
     image: chadmany20/nebulaops-backend:latest
     build:
       context: ./backend
@@ -17,6 +18,7 @@ services:
       - nebulaops
 
   frontend:
+    container_name: nebulaops-frontend
     image: chadmany20/nebulaops-frontend:latest
     build:
       context: ./frontend
