@@ -20,12 +20,12 @@ const RemoteBridge = ({ container, onClose }) => {
 
   // CPU/RAM stats from useDocker
   useEffect(() => {
-    if (bootStatus === 'connected') {
+    if (bootStatus === 'connected' && sessionAlive) {
       docker.fetchStats(container.id)
       const interval = setInterval(() => docker.fetchStats(container.id), 2000)
       return () => clearInterval(interval)
     }
-  }, [container.id, bootStatus])
+  }, [container.id, bootStatus, sessionAlive])
 
   // Initialize Terminal and WebSocket
   useEffect(() => {

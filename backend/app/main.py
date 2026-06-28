@@ -515,6 +515,8 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
                 sock.settimeout(0.05)
             sock_read = sock.recv
         elif hasattr(sock, 'read'):
+            if hasattr(sock, '_sock') and hasattr(sock._sock, 'settimeout'):
+                sock._sock.settimeout(0.05)
             sock_read = sock.read
         elif hasattr(sock, '_sock') and hasattr(sock._sock, 'recv'):
             if hasattr(sock._sock, 'settimeout'):
@@ -615,6 +617,9 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
                         sock_write(payload)
                     except Exception as e:
                         print(f"Socket send error for {container_id}: {e}")
+                        socket_closed = True
+                        stop_event.set()
+                        break
         except WebSocketDisconnect:
             print(f"Terminal WebSocket disconnected for {container_id}")
         finally:
