@@ -550,22 +550,48 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
         except RuntimeError:
             loop = asyncio.get_event_loop()
 
+        # Env-gated terminal debug logger — set TERMINAL_DEBUG=1 to enable
+        _terminal_debug = os.environ.get("TERMINAL_DEBUG") == "1"
+        _td_window_start = [time.monotonic()]
+        _td_frame_count = [0]
+        _td_byte_count = [0]
+
+        def _td_log_frame(byte_len):
+            if not _terminal_debug:
+                return
+            now = time.monotonic()
+            _td_frame_count[0] += 1
+            _td_byte_count[0] += byte_len
+            elapsed = now - _td_window_start[0]
+            if elapsed >= 1.0:
+                kbps = _td_byte_count[0] / 1024.0
+                mean_gap = (elapsed * 1000.0 / _td_frame_count[0]) if _td_frame_count[0] else 0
+                print(f"[terminal:{container_id}] {_td_frame_count[0]} frames, "
+                      f"{kbps:.2f} KB/s, mean gap {mean_gap:.2f}ms")
+                _td_window_start[0] = now
+                _td_frame_count[0] = 0
+                _td_byte_count[0] = 0
+
         def socket_to_ws():
             nonlocal socket_closed
             try:
                 while not stop_event.is_set():
                     try:
+                        t_recv = time.monotonic() if _terminal_debug else 0
                         data = sock_read(4096)
-                        
+
                         if data:
                             pass
                         else:
                             if stop_event.is_set(): break
                             print(f"Container {container_id} PTY stream ended (no data)")
                             break
-                            
+
+                        if _terminal_debug:
+                            _td_log_frame(len(data) if isinstance(data, (bytes, bytearray)) else 0)
+
                         asyncio.run_coroutine_threadsafe(
-                            websocket.send_bytes(data), 
+                            websocket.send_bytes(data),
                             loop
                         )
                     except Exception as e:
@@ -602,6 +628,7 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
 
         try:
             while True:
+                t_in_recv = time.monotonic() if _terminal_debug else 0
                 raw = await websocket.receive_text()
                 try:
                     msg = json.loads(raw)
@@ -617,6 +644,11 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
                 except json.JSONDecodeError:
                     # Fallback: treat raw text as literal input
                     payload = raw.encode()
+
+                if _terminal_debug and payload:
+                    lat_ms = (time.monotonic() - t_in_recv) * 1000.0
+                    print(f"[terminal:{container_id}] input {len(payload)}B, "
+                          f"parse+decode {lat_ms:.2f}ms")
 
                 if not socket_closed:
                     try:

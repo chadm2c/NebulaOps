@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
+import { decodeBytes, logFrame } from '../utils/terminalDebugger'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -187,12 +188,19 @@ export function useDocker() {
     
     ws.onmessage = (event) => {
       if (!callbacks.onData) return
-      
+
       if (typeof event.data === 'string') {
+        logFrame('text', event.data.length)
         callbacks.onData(event.data)
       } else if (event.data instanceof Blob) {
-        // Optimized blob handling
-        event.data.text().then(text => callbacks.onData(text))
+        // Sync decode via shared TextDecoder — avoids per-frame Promise/alloc
+        event.data.arrayBuffer().then((buf) => {
+          logFrame('bin', buf.byteLength)
+          callbacks.onData(decodeBytes(new Uint8Array(buf)))
+        })
+      } else if (event.data instanceof ArrayBuffer) {
+        logFrame('bin', event.data.byteLength)
+        callbacks.onData(decodeBytes(new Uint8Array(event.data)))
       }
     }
     

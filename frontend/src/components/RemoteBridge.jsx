@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Draggable from 'react-draggable'
 import { X, Maximize2, Minimize2, Terminal as TerminalIcon, Activity, History, Cpu } from 'lucide-react'
 import { useDocker } from '../hooks/useDocker'
+import TerminalVitals from './TerminalVitals'
 import 'xterm/css/xterm.css'
 import './RemoteBridge.css'
 
@@ -17,15 +18,6 @@ const RemoteBridge = ({ container, onClose }) => {
   const [bootStatus, setBootStatus] = useState('scanning') // scanning, unfolding, connected
   const [sessionAlive, setSessionAlive] = useState(false)
   const docker = useDocker()
-
-  // CPU/RAM stats from useDocker
-  useEffect(() => {
-    if (bootStatus === 'connected' && sessionAlive) {
-      docker.fetchStats(container.id)
-      const interval = setInterval(() => docker.fetchStats(container.id), 2000)
-      return () => clearInterval(interval)
-    }
-  }, [container.id, bootStatus, sessionAlive])
 
   // Initialize Terminal and WebSocket
   useEffect(() => {
@@ -146,9 +138,6 @@ const RemoteBridge = ({ container, onClose }) => {
     }
   }, [])
 
-  const cpuPercent = docker.stats?.cpu_percent || 0
-  const memPercent = docker.stats?.memory_percent || 0
-
   return (
     <div className="remote-bridge-container">
       <Draggable handle=".bridge-header" bounds="parent">
@@ -214,33 +203,11 @@ const RemoteBridge = ({ container, onClose }) => {
             <div ref={terminalRef} className="xterm-container" />
           </main>
 
-          <aside className="vital-strip">
-            <div className="vital-item">
-              <div className="vital-label">CPU LOAD</div>
-              <div className="vital-bar-track">
-                <div className="vital-bar-fill" style={{ height: `${cpuPercent}%` }}></div>
-              </div>
-              <div className="vital-value">{cpuPercent.toFixed(1)}%</div>
-            </div>
-            <div className="vital-item">
-              <div className="vital-label">MEM LOAD</div>
-              <div className="vital-bar-track">
-                <div className="vital-bar-fill" style={{ height: `${memPercent}%` }}></div>
-              </div>
-              <div className="vital-value">{memPercent.toFixed(1)}%</div>
-            </div>
-          </aside>
-
-          <section className="command-history">
-            <div className="history-title">SESSION METRICS</div>
-            <div className="history-list">
-               <div className="history-item" style={{ borderLeftColor: sessionAlive ? '#00ff88' : '#ff4444' }}>
-                 STATUS: {sessionAlive ? 'CONNECTED' : 'DISCONNECTED'}
-               </div>
-               <div className="history-item">PTY: {sessionAlive ? 'REALTIME' : 'OFFLINE'}</div>
-               <div className="history-item">ID: {container.id}</div>
-            </div>
-          </section>
+          <TerminalVitals
+            containerId={container.id}
+            active={bootStatus === 'connected' && sessionAlive}
+            sessionAlive={sessionAlive}
+          />
         </motion.div>
       </Draggable>
     </div>
