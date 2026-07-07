@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Draggable from 'react-draggable'
 import { X, Maximize2, Minimize2, Terminal as TerminalIcon, Activity, History, Cpu } from 'lucide-react'
 import { useDocker } from '../hooks/useDocker'
+import TerminalVitals from './TerminalVitals'
 import 'xterm/css/xterm.css'
 import './RemoteBridge.css'
 
@@ -17,15 +18,6 @@ const RemoteBridge = ({ container, onClose }) => {
   const [bootStatus, setBootStatus] = useState('scanning') // scanning, unfolding, connected
   const [sessionAlive, setSessionAlive] = useState(false)
   const docker = useDocker()
-
-  // CPU/RAM stats from useDocker
-  useEffect(() => {
-    if (bootStatus === 'connected' && sessionAlive) {
-      docker.fetchStats(container.id)
-      const interval = setInterval(() => docker.fetchStats(container.id), 2000)
-      return () => clearInterval(interval)
-    }
-  }, [container.id, bootStatus, sessionAlive])
 
   // Initialize Terminal and WebSocket
   useEffect(() => {
@@ -70,8 +62,13 @@ const RemoteBridge = ({ container, onClose }) => {
         onOpen: () => {
           setSessionAlive(true)
           term.write('\r\n\x1b[1;32m> BRIDGE ACTIVATED. PTY LINK ESTABLISHED.\x1b[0m\r\n\r\n')
-          // Focus again just in case
           term.focus()
+          // Send initial terminal size
+          session.send(JSON.stringify({
+            type: 'resize',
+            cols: term.cols,
+            rows: term.rows
+          }))
         },
         onData: (data) => {
           if (data === 'HEARTBEAT') return
@@ -90,35 +87,18 @@ const RemoteBridge = ({ container, onClose }) => {
       
       terminalSessionRef.current = session
 
-      // [Fix #2] Input batching: buffer keystrokes and flush every 30ms
-      const inputBuffer = []
-      let flushTimer = null
-
-      const flushInput = () => {
-        if (inputBuffer.length === 0) return
-        const batched = inputBuffer.join('')
-        inputBuffer.length = 0
-        const sent = session.send(batched)
-        if (!sent) {
-          for (const ch of batched) {
-            if (ch === '\x7f' || ch === '\b') {
-              if (term.buffer.active.cursorX > 0) term.write('\b \b')
-            } else if (ch === '\r') {
-              term.write('\r\n')
-            } else {
-              term.write(ch)
-            }
-          }
-        }
-      }
-
+      // Write-through send: every keystroke is sent immediately (no batching)
       term.onData(data => {
-        inputBuffer.push(data)
-        if (!flushTimer) {
-          flushTimer = setTimeout(() => {
-            flushTimer = null
-            flushInput()
-          }, 30)
+        const sent = session.send(JSON.stringify({ type: 'input', data: data }))
+        if (!sent) {
+          // Local echo fallback when WebSocket is not open
+          if (data === '\x7f' || data === '\b') {
+            if (term.buffer.active.cursorX > 0) term.write('\b \b')
+          } else if (data === '\r') {
+            term.write('\r\n')
+          } else {
+            term.write(data)
+          }
         }
       })
 
@@ -126,13 +106,21 @@ const RemoteBridge = ({ container, onClose }) => {
       const handleClick = () => term.focus()
       terminalRef.current.addEventListener('click', handleClick)
 
-      window.addEventListener('resize', () => fitAddon.fit())
+      // Send resize on window resize
+      const handleResize = () => {
+        fitAddon.fit()
+        if (xtermRef.current && terminalSessionRef.current) {
+          terminalSessionRef.current.send(JSON.stringify({
+            type: 'resize',
+            cols: xtermRef.current.cols,
+            rows: xtermRef.current.rows
+          }))
+        }
+      }
+      window.addEventListener('resize', handleResize)
       
       return () => {
-        if (flushTimer) {
-          clearTimeout(flushTimer)
-          flushInput()
-        }
+        window.removeEventListener('resize', handleResize)
         terminalRef.current?.removeEventListener('click', handleClick)
         session.close()
         term.dispose()
@@ -150,27 +138,22 @@ const RemoteBridge = ({ container, onClose }) => {
     }
   }, [])
 
-  const cpuPercent = docker.stats?.cpu_percent || 0
-  const memPercent = docker.stats?.memory_percent || 0
-
   return (
     <div className="remote-bridge-container">
       <Draggable handle=".bridge-header" bounds="parent">
         <motion.div 
           className="remote-bridge-window"
-          initial={{ height: '2px', width: '30vw', opacity: 0, rotateY: 20 }}
+          initial={{ height: '2px', width: '30vw', opacity: 0 }}
           animate={
             bootStatus === 'scanning' 
-              ? { opacity: 1, height: '200px', width: '400px', rotateY: 0 } 
+              ? { opacity: 1, height: '200px', width: '400px' } 
               : { 
                   height: '70vh', 
                   width: '70vw', 
                   opacity: 1,
-                  rotateY: 10,
                   transition: { duration: 0.8, ease: "circOut" }
                 }
           }
-          style={{ perspective: '1000px' }}
         >
           {/* Scanning Layer - Now internal to the window */}
           <AnimatePresence>
@@ -220,33 +203,11 @@ const RemoteBridge = ({ container, onClose }) => {
             <div ref={terminalRef} className="xterm-container" />
           </main>
 
-          <aside className="vital-strip">
-            <div className="vital-item">
-              <div className="vital-label">CPU LOAD</div>
-              <div className="vital-bar-track">
-                <div className="vital-bar-fill" style={{ height: `${cpuPercent}%` }}></div>
-              </div>
-              <div className="vital-value">{cpuPercent.toFixed(1)}%</div>
-            </div>
-            <div className="vital-item">
-              <div className="vital-label">MEM LOAD</div>
-              <div className="vital-bar-track">
-                <div className="vital-bar-fill" style={{ height: `${memPercent}%` }}></div>
-              </div>
-              <div className="vital-value">{memPercent.toFixed(1)}%</div>
-            </div>
-          </aside>
-
-          <section className="command-history">
-            <div className="history-title">SESSION METRICS</div>
-            <div className="history-list">
-               <div className="history-item" style={{ borderLeftColor: sessionAlive ? '#00ff88' : '#ff4444' }}>
-                 STATUS: {sessionAlive ? 'CONNECTED' : 'DISCONNECTED'}
-               </div>
-               <div className="history-item">PTY: {sessionAlive ? 'REALTIME' : 'OFFLINE'}</div>
-               <div className="history-item">ID: {container.id}</div>
-            </div>
-          </section>
+          <TerminalVitals
+            containerId={container.id}
+            active={bootStatus === 'connected' && sessionAlive}
+            sessionAlive={sessionAlive}
+          />
         </motion.div>
       </Draggable>
     </div>

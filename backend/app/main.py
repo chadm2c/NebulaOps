@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 from dotenv import load_dotenv
 
@@ -509,18 +510,12 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
         sock = client.api.exec_start(exec_id, detach=False, tty=True, socket=True)
         print(f"Socket obtained for {container_id}: {type(sock)}")
         
-        # [Fix #4] Cache socket read/write methods once (not on every poll iteration)
+        # Cache socket read/write methods once (blocking reads — no timeout)
         if hasattr(sock, 'recv'):
-            if hasattr(sock, 'settimeout'):
-                sock.settimeout(0.05)
             sock_read = sock.recv
         elif hasattr(sock, 'read'):
-            if hasattr(sock, '_sock') and hasattr(sock._sock, 'settimeout'):
-                sock._sock.settimeout(0.05)
             sock_read = sock.read
         elif hasattr(sock, '_sock') and hasattr(sock._sock, 'recv'):
-            if hasattr(sock._sock, 'settimeout'):
-                sock._sock.settimeout(0.05)
             sock_read = sock._sock.recv
         else:
             await websocket.send_text("Error: Cannot determine socket read method")
@@ -538,6 +533,14 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
             await websocket.close()
             return
         
+        # Fix 4 — Disable Nagle's algorithm on the Docker exec socket
+        raw_sock = sock if hasattr(sock, 'setsockopt') else getattr(sock, '_sock', None)
+        if raw_sock:
+            try:
+                raw_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except Exception as e:
+                print(f"Could not set TCP_NODELAY: {e}")
+        
         stop_event = threading.Event()
         socket_closed = False
         
@@ -547,26 +550,50 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
         except RuntimeError:
             loop = asyncio.get_event_loop()
 
+        # Env-gated terminal debug logger — set TERMINAL_DEBUG=1 to enable
+        _terminal_debug = os.environ.get("TERMINAL_DEBUG") == "1"
+        _td_window_start = [time.monotonic()]
+        _td_frame_count = [0]
+        _td_byte_count = [0]
+
+        def _td_log_frame(byte_len):
+            if not _terminal_debug:
+                return
+            now = time.monotonic()
+            _td_frame_count[0] += 1
+            _td_byte_count[0] += byte_len
+            elapsed = now - _td_window_start[0]
+            if elapsed >= 1.0:
+                kbps = _td_byte_count[0] / 1024.0
+                mean_gap = (elapsed * 1000.0 / _td_frame_count[0]) if _td_frame_count[0] else 0
+                print(f"[terminal:{container_id}] {_td_frame_count[0]} frames, "
+                      f"{kbps:.2f} KB/s, mean gap {mean_gap:.2f}ms")
+                _td_window_start[0] = now
+                _td_frame_count[0] = 0
+                _td_byte_count[0] = 0
+
         def socket_to_ws():
             nonlocal socket_closed
             try:
                 while not stop_event.is_set():
                     try:
+                        t_recv = time.monotonic() if _terminal_debug else 0
                         data = sock_read(4096)
-                        
+
                         if data:
                             pass
                         else:
                             if stop_event.is_set(): break
                             print(f"Container {container_id} PTY stream ended (no data)")
                             break
-                            
+
+                        if _terminal_debug:
+                            _td_log_frame(len(data) if isinstance(data, (bytes, bytearray)) else 0)
+
                         asyncio.run_coroutine_threadsafe(
-                            websocket.send_bytes(data), 
+                            websocket.send_bytes(data),
                             loop
                         )
-                    except (socket.timeout, TimeoutError, BlockingIOError):
-                        continue
                     except Exception as e:
                         if not stop_event.is_set():
                             print(f"Socket read error for {container_id}: {e}")
@@ -601,16 +628,27 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
 
         try:
             while True:
+                t_in_recv = time.monotonic() if _terminal_debug else 0
+                raw = await websocket.receive_text()
                 try:
-                    data = await websocket.receive_text()
-                    payload = data.encode()
-                except RuntimeError:
-                    try:
-                        payload = await websocket.receive_bytes()
-                    except:
-                        break
-                except:
-                    break
+                    msg = json.loads(raw)
+                    if msg.get("type") == "resize":
+                        cols = msg.get("cols", 80)
+                        rows = msg.get("rows", 24)
+                        try:
+                            client.api.exec_resize(exec_id, height=rows, width=cols)
+                        except Exception as e:
+                            print(f"exec_resize error for {container_id}: {e}")
+                        continue
+                    payload = msg.get("data", "").encode()
+                except json.JSONDecodeError:
+                    # Fallback: treat raw text as literal input
+                    payload = raw.encode()
+
+                if _terminal_debug and payload:
+                    lat_ms = (time.monotonic() - t_in_recv) * 1000.0
+                    print(f"[terminal:{container_id}] input {len(payload)}B, "
+                          f"parse+decode {lat_ms:.2f}ms")
 
                 if not socket_closed:
                     try:
