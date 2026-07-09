@@ -19,6 +19,8 @@ export function useDocker() {
   const [volumes, setVolumes] = useState([])
   const logStreamRef = useRef(null)
   const statsStreamRef = useRef(null)
+  const logReconnectRef = useRef({ id: null, attempts: 0, stopped: false })
+  const statsReconnectRef = useRef({ id: null, attempts: 0, stopped: false })
 
   const getSocket = useCallback(() => {
     if (!socket) {
@@ -80,19 +82,65 @@ export function useDocker() {
   }, [])
 
   const streamLogs = useCallback((containerId) => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${wsProtocol}//${getWsHost()}/ws/logs/${containerId}`)
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      setLogs(prev => [...prev.slice(-500), data.line])
+    logReconnectRef.current.stopped = false
+    logReconnectRef.current.attempts = 0
+
+    const connect = () => {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const ws = new WebSocket(`${wsProtocol}//${getWsHost()}/ws/logs/${containerId}`)
+
+      ws.onopen = () => {
+        logReconnectRef.current.attempts = 0
+      }
+
+      ws.onmessage = (event) => {
+        let data
+        try {
+          data = JSON.parse(event.data)
+        } catch (e) {
+          return
+        }
+        if (data && data.type === 'ping') return
+        if (data && typeof data.line !== 'undefined') {
+          setLogs(prev => [...prev.slice(-500), data.line])
+        }
+      }
+
+      ws.onclose = () => {
+        if (logStreamRef.current === ws) logStreamRef.current = null
+        if (logReconnectRef.current.stopped) return
+        logReconnectRef.current.attempts += 1
+        const delay = Math.min(1000 * 2 ** logReconnectRef.current.attempts, 30000)
+        logReconnectRef.current.id = setTimeout(connect, delay)
+      }
+
+      ws.onerror = () => {
+        try { ws.close() } catch (e) {}
+      }
+
+      logStreamRef.current = ws
     }
 
-    logStreamRef.current = ws
-    return () => ws.close()
+    connect()
+    return () => {
+      logReconnectRef.current.stopped = true
+      if (logReconnectRef.current.id) {
+        clearTimeout(logReconnectRef.current.id)
+        logReconnectRef.current.id = null
+      }
+      if (logStreamRef.current) {
+        try { logStreamRef.current.close() } catch (e) {}
+        logStreamRef.current = null
+      }
+    }
   }, [])
 
   const stopLogStream = useCallback(() => {
+    logReconnectRef.current.stopped = true
+    if (logReconnectRef.current.id) {
+      clearTimeout(logReconnectRef.current.id)
+      logReconnectRef.current.id = null
+    }
     if (logStreamRef.current) {
       logStreamRef.current.close()
       logStreamRef.current = null
@@ -112,23 +160,73 @@ export function useDocker() {
   }, [])
 
   const streamStats = useCallback((containerId) => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${wsProtocol}//${getWsHost()}/ws/stats/${containerId}`)
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      setStats(data)
+    statsReconnectRef.current.stopped = false
+    statsReconnectRef.current.attempts = 0
+
+    const connect = () => {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const ws = new WebSocket(`${wsProtocol}//${getWsHost()}/ws/stats/${containerId}`)
+
+      ws.onopen = () => {
+        statsReconnectRef.current.attempts = 0
+      }
+
+      ws.onmessage = (event) => {
+        let data
+        try {
+          data = JSON.parse(event.data)
+        } catch (e) {
+          return
+        }
+        if (data && data.type === 'ping') return
+        if (data && typeof data.cpu_percent !== 'undefined') {
+          setStats(data)
+        }
+      }
+
+      ws.onclose = () => {
+        if (statsStreamRef.current === ws) statsStreamRef.current = null
+        if (statsReconnectRef.current.stopped) return
+        statsReconnectRef.current.attempts += 1
+        const delay = Math.min(1000 * 2 ** statsReconnectRef.current.attempts, 30000)
+        statsReconnectRef.current.id = setTimeout(connect, delay)
+      }
+
+      ws.onerror = () => {
+        try { ws.close() } catch (e) {}
+      }
+
+      statsStreamRef.current = ws
     }
 
-    statsStreamRef.current = ws
-    return () => ws.close()
+    connect()
+    return () => {
+      statsReconnectRef.current.stopped = true
+      if (statsReconnectRef.current.id) {
+        clearTimeout(statsReconnectRef.current.id)
+        statsReconnectRef.current.id = null
+      }
+      if (statsStreamRef.current) {
+        try { statsStreamRef.current.close() } catch (e) {}
+        statsStreamRef.current = null
+      }
+    }
   }, [])
 
   const stopStatsStream = useCallback(() => {
+    statsReconnectRef.current.stopped = true
+    if (statsReconnectRef.current.id) {
+      clearTimeout(statsReconnectRef.current.id)
+      statsReconnectRef.current.id = null
+    }
     if (statsStreamRef.current) {
       statsStreamRef.current.close()
       statsStreamRef.current = null
     }
+    logReconnectRef.current.stopped = true
+    statsReconnectRef.current.stopped = true
+    if (logReconnectRef.current.id) clearTimeout(logReconnectRef.current.id)
+    if (statsReconnectRef.current.id) clearTimeout(statsReconnectRef.current.id)
   }, [])
 
   const fetchInspect = useCallback(async (containerId) => {

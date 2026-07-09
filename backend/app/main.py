@@ -48,6 +48,14 @@ def get_docker_client():
         DOCKER_AVAILABLE = False
         return None
 
+async def _safe_close(websocket: WebSocket):
+    try:
+        from starlette.websockets import WebSocketState
+        if websocket.client_state in (WebSocketState.CONNECTING, WebSocketState.CONNECTED):
+            await websocket.close()
+    except Exception:
+        pass
+
 app = FastAPI()
 
 app.add_middleware(
@@ -688,105 +696,157 @@ async def logs_websocket(websocket: WebSocket, container_id: str):
     await websocket.accept()
     client = get_docker_client()
     if not client:
-        await websocket.send_text("Error: Docker not available")
-        await websocket.close()
+        try:
+            await websocket.send_text("Error: Docker not available")
+        except:
+            pass
+        await _safe_close(websocket)
         return
     try:
-        container = client.containers.get(container_id)
+        container = await asyncio.to_thread(client.containers.get, container_id)
     except Exception as e:
-        await websocket.send_text(f"Error: Container not found: {str(e)}")
-        await websocket.close()
+        print(f"Logs WebSocket: container lookup failed for {container_id}: {type(e).__name__}: {e}")
+        try:
+            await websocket.send_text(f"Error: Container not found: {str(e)}")
+        except:
+            pass
+        await _safe_close(websocket)
         return
+
+    async def heartbeat():
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await websocket.send_json({"type": "ping"})
+            except Exception:
+                return
+
+    hb_task = asyncio.create_task(heartbeat())
     try:
-        for chunk in container.logs(stream=True, follow=True, timestamps=True):
-            if isinstance(chunk, bytes):
-                chunk = chunk.decode('utf-8', errors='replace')
+        log_stream = await asyncio.to_thread(
+            lambda: container.logs(stream=True, follow=True, timestamps=True)
+        )
+        loop = asyncio.get_event_loop()
+        while True:
+            try:
+                chunk = await loop.run_in_executor(None, next, log_stream)
+            except StopIteration:
+                break
+            chunk = chunk.decode('utf-8', errors='replace') if isinstance(chunk, bytes) else chunk
             for line in chunk.splitlines():
                 if not line:
                     continue
-                await websocket.send_json({"line": line})
+                try:
+                    await websocket.send_json({"line": line})
+                except (WebSocketDisconnect, RuntimeError, ConnectionResetError, BrokenPipeError):
+                    raise WebSocketDisconnect()
     except WebSocketDisconnect:
         print(f"Logs WebSocket disconnected for {container_id}")
+    except asyncio.CancelledError:
+        raise
+    except (RuntimeError, ConnectionResetError, BrokenPipeError) as e:
+        print(f"Logs WebSocket: client gone for {container_id}: {type(e).__name__}")
     except Exception as e:
-        print(f"Logs WebSocket error: {e}")
-        try:
-            await websocket.send_text(f"Error: {str(e)}")
-        except:
-            pass
+        print(f"Logs WebSocket error for {container_id}: {type(e).__name__}: {e}")
     finally:
-        try:
-            await websocket.close()
-        except:
-            pass
+        hb_task.cancel()
+        await _safe_close(websocket)
 
 @app.websocket("/ws/stats/{container_id}")
 async def stats_websocket(websocket: WebSocket, container_id: str):
     await websocket.accept()
     client = get_docker_client()
     if not client:
-        await websocket.send_text("Error: Docker not available")
-        await websocket.close()
+        try:
+            await websocket.send_text("Error: Docker not available")
+        except:
+            pass
+        await _safe_close(websocket)
         return
     try:
-        container = client.containers.get(container_id)
+        container = await asyncio.to_thread(client.containers.get, container_id)
     except Exception as e:
-        await websocket.send_text(f"Error: Container not found: {str(e)}")
-        await websocket.close()
+        print(f"Stats WebSocket: container lookup failed for {container_id}: {type(e).__name__}: {e}")
+        try:
+            await websocket.send_text(f"Error: Container not found: {str(e)}")
+        except:
+            pass
+        await _safe_close(websocket)
         return
+
+    async def heartbeat():
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await websocket.send_json({"type": "ping"})
+            except Exception:
+                return
+
+    hb_task = asyncio.create_task(heartbeat())
     try:
         while True:
-            stats = container.stats(stream=False)
-            cpu_delta = stats['cpu_stats']['cpu_usage']['total_usage'] - stats['precpu_stats']['cpu_usage']['total_usage']
-            system_cpu_delta = stats['cpu_stats']['system_cpu_usage'] - stats['precpu_stats']['system_cpu_usage']
-            num_cpus = stats['cpu_stats'].get('online_cpus', 1)
+            try:
+                stats = await asyncio.to_thread(container.stats, stream=False)
+            except Exception as e:
+                print(f"Stats WebSocket: docker stats call failed for {container_id}: {type(e).__name__}: {e}")
+                break
 
-            cpu_percent = 0.0
-            if system_cpu_delta > 0 and cpu_delta > 0:
-                cpu_percent = (cpu_delta / system_cpu_delta) * num_cpus * 100.0
+            try:
+                cpu_delta = stats['cpu_stats']['cpu_usage']['total_usage'] - stats['precpu_stats']['cpu_usage']['total_usage']
+                system_cpu_delta = stats['cpu_stats']['system_cpu_usage'] - stats['precpu_stats']['system_cpu_usage']
+                num_cpus = stats['cpu_stats'].get('online_cpus', 1)
 
-            mem_usage = stats['memory_stats'].get('usage', 0)
-            mem_limit = stats['memory_stats'].get('limit', 1)
-            mem_percent = (mem_usage / mem_limit) * 100.0 if mem_limit else 0.0
+                cpu_percent = 0.0
+                if system_cpu_delta > 0 and cpu_delta > 0:
+                    cpu_percent = (cpu_delta / system_cpu_delta) * num_cpus * 100.0
 
-            network_rx = 0
-            network_tx = 0
-            networks = stats.get('networks', {})
-            for net in networks.values():
-                network_rx += net.get('rx_bytes', 0)
-                network_tx += net.get('tx_bytes', 0)
+                mem_usage = stats['memory_stats'].get('usage', 0)
+                mem_limit = stats['memory_stats'].get('limit', 1)
+                mem_percent = (mem_usage / mem_limit) * 100.0 if mem_limit else 0.0
 
-            block_read = 0
-            block_write = 0
-            blkio_stats = stats.get('blkio_stats', {}).get('io_service_bytes_recursive', [])
-            for blk in blkio_stats:
-                if blk.get('op') in ('read', 'Read'):
-                    block_read = int(block_read + blk['value'])
-                elif blk.get('op') in ('write', 'Write'):
-                    block_write = int(block_write + blk['value'])
+                network_rx = 0
+                network_tx = 0
+                networks = stats.get('networks', {})
+                for net in networks.values():
+                    network_rx += net.get('rx_bytes', 0)
+                    network_tx += net.get('tx_bytes', 0)
 
-            await websocket.send_json({
-                "cpu_percent": round(float(cpu_percent), 2),
-                "memory_percent": round(float(mem_percent), 2),
-                "memory_usage": mem_usage,
-                "network_rx": network_rx,
-                "network_tx": network_tx,
-                "block_read": block_read,
-                "block_write": block_write
-            })
+                block_read = 0
+                block_write = 0
+                blkio_stats = stats.get('blkio_stats', {}).get('io_service_bytes_recursive', [])
+                for blk in blkio_stats:
+                    if blk.get('op') in ('read', 'Read'):
+                        block_read = int(block_read + blk['value'])
+                    elif blk.get('op') in ('write', 'Write'):
+                        block_write = int(block_write + blk['value'])
+
+                await websocket.send_json({
+                    "cpu_percent": round(float(cpu_percent), 2),
+                    "memory_percent": round(float(mem_percent), 2),
+                    "memory_usage": mem_usage,
+                    "network_rx": network_rx,
+                    "network_tx": network_tx,
+                    "block_read": block_read,
+                    "block_write": block_write
+                })
+            except (WebSocketDisconnect, RuntimeError, ConnectionResetError, BrokenPipeError):
+                raise WebSocketDisconnect()
+            except KeyError as e:
+                print(f"Stats WebSocket: malformed stats payload for {container_id}: missing key {e}")
+                break
+
             await asyncio.sleep(2)
     except WebSocketDisconnect:
         print(f"Stats WebSocket disconnected for {container_id}")
+    except asyncio.CancelledError:
+        raise
+    except (RuntimeError, ConnectionResetError, BrokenPipeError) as e:
+        print(f"Stats WebSocket: client gone for {container_id}: {type(e).__name__}")
     except Exception as e:
-        print(f"Stats WebSocket error: {e}")
-        try:
-            await websocket.send_text(f"Error: {str(e)}")
-        except:
-            pass
+        print(f"Stats WebSocket error for {container_id}: {type(e).__name__}: {e}")
     finally:
-        try:
-            await websocket.close()
-        except:
-            pass
+        hb_task.cancel()
+        await _safe_close(websocket)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
