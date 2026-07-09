@@ -351,7 +351,7 @@ async def get_container_ai_logs(container_id: str):
 @app.get("/api/ai/explain")
 async def explain_infrastructure():
     if not DOCKER_AVAILABLE:
-        return {"explanation": "Temporal analysis unavailable: Docker engine offline."}
+        return {"explanation": "Temporal analysis unavailable: Docker engine offline.", "metrics": None}
     try:
         containers = [
             {
@@ -363,10 +363,10 @@ async def explain_infrastructure():
             } for c in DOCKER_CLIENT.containers.list()
         ]
         clusters = group_containers_into_constellations(containers)
-        explanation = explainer.explain(containers, clusters)
-        return {"explanation": explanation}
+        result = explainer.explain(containers, clusters)
+        return result
     except Exception as e:
-        return {"explanation": f"AI Analysis failed: {str(e)}"}
+        return {"explanation": f"AI Analysis failed: {str(e)}", "metrics": None}
 
 @app.get("/api/containers/{container_id}/logs")
 async def get_container_logs(container_id: str, tail: int = 100):
