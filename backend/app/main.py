@@ -487,7 +487,7 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
 
     try:
         # Try to find a working shell
-        shells = ["bash", "sh"]
+        shells = ["bash", "ash", "sh", "zsh", "powershell", "cmd"]
         exec_id = None
         
         for shell in shells:
@@ -507,7 +507,7 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
                 continue
         
         if not exec_id:
-            await websocket.send_text("Error: Could not find a suitable shell (bash/sh)")
+            await websocket.send_text("Error: Could not find a suitable shell (bash/ash/sh/zsh/powershell/cmd)")
             print(f"FAILED to find shell for container {container_id}")
             await websocket.close()
             return
