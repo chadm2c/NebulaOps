@@ -482,42 +482,78 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
     client = get_docker_client()
     if not client:
         await websocket.send_text("Error: Docker not available")
-        await websocket.close()
+        await _safe_close(websocket)
         return
 
     try:
-        # Try to find a working shell
-        shells = ["bash", "ash", "sh", "zsh", "powershell", "cmd"]
+        # Probe shells in order of likelihood: /bin/sh exists on virtually
+        # every Linux image; bash is the most common interactive shell.
+        # A "which <shell>" exec is run inside the container to verify the
+        # binary exists before committing — docker exec_create succeeds even
+        # when the binary is missing, so the probe prevents silent PTY death.
+        shells = ["sh", "bash", "ash", "zsh", "powershell", "cmd"]
         exec_id = None
-        
+
         for shell in shells:
             try:
+                container_obj = client.containers.get(container_id)
+                exit_code, output = container_obj.exec_run(f"which {shell}", stderr=False)
+                if exit_code == 0 and output.strip():
+                    print(f"Shell probe: {shell} exists in container {container_id}")
+                else:
+                    continue
                 exec_instance = client.api.exec_create(
-                    container_id, 
+                    container_id,
                     shell,
-                    stdin=True, 
-                    stdout=True, 
-                    stderr=True, 
+                    stdin=True,
+                    stdout=True,
+                    stderr=True,
                     tty=True
                 )
                 exec_id = exec_instance['Id']
                 break
             except Exception as e:
-                print(f"Failed to create exec for {shell}: {e}")
+                print(f"Shell probe failed for {shell} in {container_id}: {type(e).__name__}: {e}")
                 continue
-        
+
         if not exec_id:
-            await websocket.send_text("Error: Could not find a suitable shell (bash/ash/sh/zsh/powershell/cmd)")
-            print(f"FAILED to find shell for container {container_id}")
-            await websocket.close()
-            return
+            # Last resort: try sh directly without probe (handles containers
+            # where which itself is missing, e.g. distroless with sh only).
+            try:
+                exec_instance = client.api.exec_create(
+                    container_id,
+                    "sh",
+                    stdin=True,
+                    stdout=True,
+                    stderr=True,
+                    tty=True
+                )
+                exec_id = exec_instance['Id']
+                print(f"Fallback: sh accepted for container {container_id}")
+            except Exception as e:
+                await websocket.send_text(
+                    "Error: No supported shell found in container "
+                    "(tried sh, bash, ash, zsh, powershell, cmd)"
+                )
+                print(f"FAILED to find shell for container {container_id}")
+                await _safe_close(websocket)
+                return
         
         print(f"Successfully created exec {exec_id} for container {container_id}")
         
         # Start the exec instance and get a socket-like object
         sock = client.api.exec_start(exec_id, detach=False, tty=True, socket=True)
         print(f"Socket obtained for {container_id}: {type(sock)}")
-        
+
+        # Apply a sane default PTY size immediately after exec_start so the PTY
+        # is sized before any client resize races in. A "not started" 400 here
+        # is non-fatal and handled silently — the exec process is in fact
+        # running; only the resize call lags.
+        try:
+            client.api.exec_resize(exec_id, height=24, width=80)
+        except Exception as e:
+            print(f"Initial exec_resize skipped for {container_id}: {type(e).__name__}: {e}")
+
         # Cache socket read/write methods once (blocking reads — no timeout)
         if hasattr(sock, 'recv'):
             sock_read = sock.recv
@@ -527,7 +563,7 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
             sock_read = sock._sock.recv
         else:
             await websocket.send_text("Error: Cannot determine socket read method")
-            await websocket.close()
+            await _safe_close(websocket)
             return
 
         if hasattr(sock, 'send'):
@@ -538,16 +574,18 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
             sock_write = sock._sock.send
         else:
             await websocket.send_text("Error: Cannot determine socket write method")
-            await websocket.close()
+            await _safe_close(websocket)
             return
         
-        # Fix 4 — Disable Nagle's algorithm on the Docker exec socket
+        # Disable Nagle's algorithm on the Docker exec socket when the
+        # underlying transport exposes a raw IP socket. Some SDK return a
+        # SocketIO wrapper that does not support setsockopt — log and move on.
         raw_sock = sock if hasattr(sock, 'setsockopt') else getattr(sock, '_sock', None)
         if raw_sock:
             try:
                 raw_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             except Exception as e:
-                print(f"Could not set TCP_NODELAY: {e}")
+                print(f"Could not set TCP_NODELAY for {container_id}: {type(e).__name__}: {e}")
         
         stop_event = threading.Event()
         socket_closed = False
@@ -623,12 +661,11 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
         thread = threading.Thread(target=socket_to_ws, daemon=True)
         thread.start()
 
-        # [Fix #5] Heartbeat task to detect silent disconnects
         async def heartbeat():
             try:
                 while True:
                     await asyncio.sleep(30)
-                    await websocket.send_text("HEARTBEAT")
+                    await websocket.send_json({"type": "ping"})
             except asyncio.CancelledError:
                 pass
 
@@ -646,7 +683,14 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
                         try:
                             client.api.exec_resize(exec_id, height=rows, width=cols)
                         except Exception as e:
-                            print(f"exec_resize error for {container_id}: {e}")
+                            # Non-fatal: a resize on a not-yet-started or
+                            # recently-ended exec is harmless; the default
+                            # size was applied right after exec_start.
+                            msg_text = str(e).lower()
+                            if "not started" in msg_text or "no such exec" in msg_text:
+                                pass
+                            else:
+                                print(f"exec_resize error for {container_id}: {type(e).__name__}: {e}")
                         continue
                     payload = msg.get("data", "").encode()
                 except json.JSONDecodeError:
@@ -680,16 +724,13 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
             thread.join(timeout=0.5)
             
     except Exception as e:
-        print(f"Terminal WebSocket error: {e}")
+        print(f"Terminal WebSocket error: {type(e).__name__}: {e}")
         try:
             await websocket.send_text(f"Error: {str(e)}")
         except:
             pass
     finally:
-        try:
-            await websocket.close()
-        except:
-            pass
+        await _safe_close(websocket)
 
 @app.websocket("/ws/logs/{container_id}")
 async def logs_websocket(websocket: WebSocket, container_id: str):

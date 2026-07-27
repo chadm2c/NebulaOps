@@ -19,6 +19,15 @@ const RemoteBridge = ({ container, onClose }) => {
   const [sessionAlive, setSessionAlive] = useState(false)
   const docker = useDocker()
 
+  // Subscribe to the shared stats stream so TerminalVitals (rendered as a
+  // child below) reads live stats from the singleton store instead of polling
+  // /api/containers/{id}/stats every 2s via fetchStats.
+  useEffect(() => {
+    if (!container?.id) return
+    const stop = docker.streamStats(container.id)
+    return () => stop && stop()
+  }, [container?.id])
+
   // Initialize Terminal and WebSocket
   useEffect(() => {
     if (bootStatus === 'connected' && terminalRef.current && !xtermRef.current) {
@@ -71,7 +80,9 @@ const RemoteBridge = ({ container, onClose }) => {
           }))
         },
         onData: (data) => {
-          if (data === 'HEARTBEAT') return
+          // The useDocker hook already filters {"type":"ping"} heartbeats
+          // out of the stream before invoking onData, so any data arriving
+          // here is genuine PTY output.
           term.write(data)
         },
         onError: (err) => {

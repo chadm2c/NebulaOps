@@ -6,11 +6,11 @@ const TerminalVitals = memo(function TerminalVitals({ containerId, active, sessi
   const [cpu, setCpu] = useState(0)
   const [mem, setMem] = useState(0)
 
+  // Stats flow in through the shared useDocker store (RemoteBridge subscribes
+  // to the /ws/stats/{id} stream when active). No local 2s polling needed.
   useEffect(() => {
     if (!active) return
     docker.fetchStats(containerId)
-    const interval = setInterval(() => docker.fetchStats(containerId), 2000)
-    return () => clearInterval(interval)
   }, [containerId, active])
 
   useEffect(() => {
