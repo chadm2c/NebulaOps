@@ -39,15 +39,6 @@ class CopilotAgent:
         
         return llm_client.query(self.system_prompt, user_prompt)
 
-    def get_action_recommendation(self, container: Dict[str, Any]) -> str:
-        """
-        Provides specific advice for a selected container using LLM.
-        """
-        system_prompt = "You are an expert DevOps engineer. Provide a 1-sentence action recommendation for the given container state."
-        user_prompt = f"Container: {container.get('name')}\nImage: {container.get('image')}\nStatus: {container.get('status')}\nCPU: {container.get('cpu_percent') or 0}%\nMEM: {container.get('memory_percent') or 0}%"
-        
-        return llm_client.query(system_prompt, user_prompt)
-
     def chat(self, user_message: str, history: List[Dict[str, str]], context: Dict[str, Any]) -> str:
         """
         Engages in a conversation with the user, using the current infrastructure state as context.

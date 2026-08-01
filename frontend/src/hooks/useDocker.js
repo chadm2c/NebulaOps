@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import { decodeBytes, logFrame } from '../utils/terminalDebugger'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -67,18 +67,6 @@ const store = {
   setVolumes(v) { this.patch({ volumes: v }) },
 }
 
-const _terminalDebug = () => false
-
-function streamFileFrame(data) {
-  if (!data) return
-  if (data && data.type === 'ping') return
-  if (data && typeof data.line !== 'undefined') {
-    store.setLogs((prev) => [...prev.slice(-500), data.line])
-  } else if (data && typeof data.cpu_percent !== 'undefined') {
-    store.setStats(data)
-  }
-}
-
 function startStatsStream(containerId) {
   store.statsReconnect.stopped = false
   store.statsReconnect.attempts = 0
@@ -120,18 +108,6 @@ function startStatsStream(containerId) {
   }
 
   connect()
-}
-
-function stopStatsStream() {
-  store.statsReconnect.stopped = true
-  if (store.statsReconnect.id) {
-    clearTimeout(store.statsReconnect.id)
-    store.statsReconnect.id = null
-  }
-  if (store.statsStreamRef) {
-    try { store.statsStreamRef.close() } catch (e) {}
-    store.statsStreamRef = null
-  }
 }
 
 function startLogsStream(containerId) {

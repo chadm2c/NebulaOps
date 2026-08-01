@@ -18,7 +18,6 @@ def group_containers_into_constellations(containers: List[Dict[str, Any]]) -> Li
         cluster_key = None
         
         # 1. Check for compose project/service labels
-        state = container.get('state', {})
         # Note: In real scenarios, we'd look deep into container.attrs.Labels
         # For now, let's use the container name prefix or image name as a heuristic
         

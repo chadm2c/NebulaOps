@@ -1,4 +1,3 @@
-import re
 from .llm_client import llm_client
 
 class LogSummarizer:

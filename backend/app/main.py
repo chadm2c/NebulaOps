@@ -11,7 +11,7 @@ import time
 import threading
 import socket
 from typing import List, Dict, Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.ai.constellation_mapper import group_containers_into_constellations
@@ -76,13 +76,6 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: Dict[str, Any]):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except:
-                pass
 
 manager = ConnectionManager()
 
