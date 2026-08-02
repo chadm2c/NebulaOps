@@ -80,18 +80,71 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 demo_containers_config = [
-    {'name': 'api-gateway', 'image': 'nginx:latest', 'network': 'app-network'},
-    {'name': 'auth-service', 'image': 'node:18-alpine', 'network': 'app-network'},
-    {'name': 'user-service', 'image': 'node:18-alpine', 'network': 'app-network'},
-    {'name': 'postgres-db', 'image': 'postgres:15', 'network': 'app-network'},
-    {'name': 'redis-cache', 'image': 'redis:alpine', 'network': 'app-network'},
-    {'name': 'monitoring', 'image': 'prometheus:latest', 'network': None},
-    {'name': 'grafana', 'image': 'grafana:latest', 'network': None},
-    {'name': 'elasticsearch', 'image': 'elasticsearch:8', 'network': None},
-    {'name': 'kibana', 'image': 'kibana:8', 'network': None},
-    {'name': 'rabbitmq', 'image': 'rabbitmq:3', 'network': None},
-    {'name': 'jenkins', 'image': 'jenkins:latest', 'network': None},
-    {'name': 'minio', 'image': 'minio:latest', 'network': None},
+    # Edge / Gateway
+    {'name': 'api-gateway', 'image': 'nginx:1.27-alpine', 'network': 'edge', 'cpu': (2, 15), 'mem': (10, 40)},
+    {'name': 'edge-router', 'image': 'traefik:v3.0', 'network': 'edge', 'cpu': (2, 12), 'mem': (10, 35)},
+    {'name': 'web-frontend', 'image': 'nginx:1.27-alpine', 'network': 'edge', 'cpu': (2, 20), 'mem': (15, 45)},
+    # Identity
+    {'name': 'identity-auth', 'image': 'node:20-alpine', 'network': 'identity', 'cpu': (3, 25), 'mem': (20, 55)},
+    {'name': 'identity-token', 'image': 'node:20-alpine', 'network': 'identity', 'cpu': (2, 18), 'mem': (15, 50)},
+    {'name': 'identity-session', 'image': 'redis:7-alpine', 'network': 'identity', 'cpu': (1, 10), 'mem': (25, 65)},
+    {'name': 'identity-db', 'image': 'postgres:15-alpine', 'network': 'identity', 'cpu': (2, 15), 'mem': (40, 75)},
+    # Payments
+    {'name': 'payments-api', 'image': 'node:20-alpine', 'network': 'payments', 'cpu': (3, 30), 'mem': (20, 60)},
+    {'name': 'payments-worker', 'image': 'python:3.11-slim', 'network': 'payments', 'cpu': (10, 55), 'mem': (25, 65)},
+    {'name': 'payments-ledger', 'image': 'golang:1.22-alpine', 'network': 'payments', 'cpu': (2, 20), 'mem': (15, 45)},
+    {'name': 'payments-cache', 'image': 'redis:7-alpine', 'network': 'payments', 'cpu': (1, 8), 'mem': (20, 55)},
+    {'name': 'payments-db', 'image': 'postgres:15-alpine', 'network': 'payments', 'cpu': (3, 25), 'mem': (45, 80)},
+    # Orders
+    {'name': 'orders-api', 'image': 'node:20-alpine', 'network': 'orders', 'cpu': (3, 28), 'mem': (20, 55)},
+    {'name': 'orders-worker', 'image': 'python:3.11-slim', 'network': 'orders', 'cpu': (8, 48), 'mem': (25, 60)},
+    {'name': 'orders-db', 'image': 'postgres:15-alpine', 'network': 'orders', 'cpu': (2, 18), 'mem': (40, 75)},
+    # Catalog
+    {'name': 'catalog-api', 'image': 'node:20-alpine', 'network': 'catalog', 'cpu': (3, 25), 'mem': (20, 55)},
+    {'name': 'catalog-search', 'image': 'elasticsearch:8.13', 'network': 'catalog', 'cpu': (10, 45), 'mem': (80, 96)},
+    {'name': 'catalog-db', 'image': 'postgres:15-alpine', 'network': 'catalog', 'cpu': (2, 16), 'mem': (40, 72)},
+    # Inventory
+    {'name': 'inventory-api', 'image': 'golang:1.22-alpine', 'network': 'inventory', 'cpu': (2, 20), 'mem': (15, 45)},
+    {'name': 'inventory-worker', 'image': 'python:3.11-slim', 'network': 'inventory', 'cpu': (6, 40), 'mem': (20, 55)},
+    {'name': 'inventory-cache', 'image': 'redis:7-alpine', 'network': 'inventory', 'cpu': (1, 8), 'mem': (20, 55)},
+    {'name': 'inventory-db', 'image': 'mysql:8.4', 'network': 'inventory', 'cpu': (3, 22), 'mem': (45, 78)},
+    # Search
+    {'name': 'search-indexer', 'image': 'python:3.11-slim', 'network': 'search', 'status': 'exited', 'cpu': (1, 5), 'mem': (10, 25)},
+    {'name': 'search-query', 'image': 'golang:1.22-alpine', 'network': 'search', 'cpu': (2, 20), 'mem': (15, 45)},
+    {'name': 'search-suggest', 'image': 'node:20-alpine', 'network': 'search', 'cpu': (2, 18), 'mem': (15, 45)},
+    # Notifications
+    {'name': 'notifications-api', 'image': 'node:20-alpine', 'network': 'notifications', 'cpu': (3, 25), 'mem': (20, 55)},
+    {'name': 'notifications-email', 'image': 'python:3.11-slim', 'network': 'notifications', 'status': 'exited', 'cpu': (1, 5), 'mem': (10, 25)},
+    {'name': 'notifications-push', 'image': 'golang:1.22-alpine', 'network': 'notifications', 'cpu': (2, 18), 'mem': (15, 40)},
+    {'name': 'notifications-webhook', 'image': 'node:20-alpine', 'network': 'notifications', 'cpu': (2, 15), 'mem': (15, 40)},
+    # Data Pipeline
+    {'name': 'pipeline-ingest', 'image': 'python:3.11-slim', 'network': 'pipeline', 'cpu': (15, 60), 'mem': (35, 70)},
+    {'name': 'pipeline-transform', 'image': 'python:3.11-slim', 'network': 'pipeline', 'cpu': (20, 75), 'mem': (40, 80)},
+    {'name': 'pipeline-stream', 'image': 'kafka:3.7', 'network': 'pipeline', 'cpu': (5, 35), 'mem': (50, 85)},
+    {'name': 'pipeline-schema', 'image': 'confluentinc/cp-schema-registry:7.6', 'network': 'pipeline', 'cpu': (4, 30), 'mem': (40, 75)},
+    {'name': 'pipeline-orchestrator', 'image': 'apache/airflow:2.9', 'network': 'pipeline', 'cpu': (5, 40), 'mem': (35, 70)},
+    # ML Platform
+    {'name': 'ml-api', 'image': 'python:3.11-slim', 'network': 'ml', 'cpu': (3, 25), 'mem': (30, 60)},
+    {'name': 'ml-trainer', 'image': 'python:3.11-slim', 'network': 'ml', 'cpu': (70, 92), 'mem': (50, 85)},
+    {'name': 'ml-embedding', 'image': 'python:3.11-slim', 'network': 'ml', 'cpu': (60, 88), 'mem': (40, 75)},
+    {'name': 'ml-model-registry', 'image': 'mlflow/mlflow:2.11', 'network': 'ml', 'cpu': (3, 20), 'mem': (30, 65)},
+    # Monitoring
+    {'name': 'monitoring-prometheus', 'image': 'prom/prometheus:v2.51', 'network': 'monitoring', 'cpu': (4, 28), 'mem': (30, 65)},
+    {'name': 'monitoring-grafana', 'image': 'grafana/grafana:10.4', 'network': 'monitoring', 'cpu': (2, 15), 'mem': (25, 55)},
+    {'name': 'monitoring-loki', 'image': 'grafana/loki:3.0', 'network': 'monitoring', 'cpu': (3, 22), 'mem': (40, 75)},
+    {'name': 'monitoring-tempo', 'image': 'grafana/tempo:2.4', 'network': 'monitoring', 'cpu': (2, 18), 'mem': (35, 70)},
+    # CI/CD
+    {'name': 'cicd-jenkins', 'image': 'jenkins/jenkins:lts-jdk17', 'network': 'cicd', 'cpu': (5, 45), 'mem': (45, 85)},
+    {'name': 'cicd-runner', 'image': 'gitlab/gitlab-runner:alpine', 'network': 'cicd', 'cpu': (3, 30), 'mem': (20, 55)},
+    {'name': 'cicd-artifactory', 'image': 'sonatype/nexus3', 'network': 'cicd', 'cpu': (3, 25), 'mem': (50, 85)},
+    # Storage
+    {'name': 'storage-minio', 'image': 'minio/minio:latest', 'network': 'storage', 'cpu': (4, 35), 'mem': (40, 70)},
+    {'name': 'storage-elastic', 'image': 'elasticsearch:8.13', 'network': 'storage', 'cpu': (8, 40), 'mem': (78, 95)},
+    {'name': 'storage-redis', 'image': 'redis:7-alpine', 'network': 'storage', 'status': 'paused', 'cpu': (1, 5), 'mem': (10, 25)},
+    # Feature Flags
+    {'name': 'featureflags-api', 'image': 'node:20-alpine', 'network': 'featureflags', 'cpu': (2, 18), 'mem': (15, 45)},
+    {'name': 'featureflags-eval', 'image': 'golang:1.22-alpine', 'network': 'featureflags', 'cpu': (2, 15), 'mem': (15, 40)},
+    {'name': 'featureflags-db', 'image': 'postgres:15-alpine', 'network': 'featureflags', 'cpu': (2, 14), 'mem': (35, 65)},
 ]
 
 def distribute_containers(num_containers: int) -> List[Dict[str, Any]]:
@@ -201,19 +254,27 @@ def get_demo_containers() -> List[Dict[str, Any]]:
     for i, c in enumerate(demo_containers_config):
         pos = positions[i] if i < len(positions) else {'x': 0, 'y': 0, 'z': 0}
         
+        status = c.get('status', 'running')
+        cpu_lo, cpu_hi = c.get('cpu', (1, 45))
+        mem_lo, mem_hi = c.get('mem', (10, 80))
+        
         result.append({
             'id': f"demo-{i+1}",
             'name': c['name'],
             'image': c['image'],
-            'status': 'running',
+            'status': status,
             'network': c.get('network', None),
-            'cpu_percent': round(float(random.uniform(1, 45)), 2),
-            'memory_percent': round(float(random.uniform(10, 80)), 2),
+            'cpu_percent': round(float(random.uniform(cpu_lo, cpu_hi)), 2),
+            'memory_percent': round(float(random.uniform(mem_lo, mem_hi)), 2),
             'memory_usage': random.randint(50000000, 500000000),
             'network_rx': random.randint(1000, 100000),
             'network_tx': random.randint(1000, 100000),
             'created': time.time() - random.randint(3600, 86400 * 7),
-            'state': {'Running': True, 'Paused': False},
+            'state': {
+                'Running': status == 'running',
+                'Paused': status == 'paused',
+                'Status': status,
+            },
             'position': pos
         })
     
