@@ -66,30 +66,6 @@ export function formatUptime(attrs) {
   return `${mins}m`
 }
 
-export function formatResources(attrs, stats) {
-  const host = pickHostConfig(attrs)
-  const memLimit = Number(host.Memory) || 0
-  const nanoCpus = Number(host.NanoCpus) || 0
-  const cpuLimit = nanoCpus > 0 ? nanoCpus / 1e9 : 0
-
-  const memUsed = stats && stats.memory_usage ? Number(stats.memory_usage) : null
-  const cpuPercent = stats && typeof stats.cpu_percent !== 'undefined' ? Number(stats.cpu_percent) : null
-
-  return {
-    memory: {
-      limitBytes: memLimit,
-      unlimited: memLimit === 0,
-      usedBytes: memUsed,
-      pct: memLimit > 0 && memUsed !== null ? Math.min(100, (memUsed / memLimit) * 100) : null,
-    },
-    cpu: {
-      cores: cpuLimit,
-      unlimited: cpuLimit === 0,
-      pct: cpuPercent,
-    },
-  }
-}
-
 export function extractCompose(attrs) {
   const labels = pickLabels(attrs)
   const project = labels['com.docker.compose.project']
@@ -139,17 +115,6 @@ export function extractCommand(attrs) {
   const full = parts.join(' ').trim()
   if (!full) return ''
   return full.length > 80 ? full.slice(0, 77) + '…' : full
-}
-
-export function extractMountsSummary(attrs) {
-  const mounts = (attrs && attrs.Mounts) || []
-  return mounts.map((m) => ({
-    source: m.Source || '',
-    destination: m.Destination || '',
-    mode: m.Mode || '',
-    type: m.Type || '',
-    rw: m.RW !== false,
-  }))
 }
 
 export function extractRiskFlags(attrs) {

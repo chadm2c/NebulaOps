@@ -5,12 +5,10 @@ import { useDocker } from '../hooks/useDocker'
 import {
   formatHealth,
   formatUptime,
-  formatResources,
   extractCompose,
   extractNetworks,
   extractPorts,
   extractCommand,
-  extractMountsSummary,
 } from './inspect/formatInspect'
 import './HolographicHUD.css'
 
@@ -19,14 +17,6 @@ const TONE_COLORS = {
   warn: '#ffaa00',
   critical: '#ff3300',
   neutral: '#88aacc',
-}
-
-const bytesToHuman = (bytes) => {
-  if (!bytes || bytes <= 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
 const SectionHeader = ({ children }) => (
@@ -49,31 +39,15 @@ const InspectRow = ({ label, value, tone }) => (
   </div>
 )
 
-const ResourceBar = ({ label, pct, value, limit, color }) => (
-  <div className="stat-row">
-    <span className="stat-label">{label}</span>
-    <div className="stat-bar-container">
-      <div className={`stat-bar ${pct !== null && pct > 80 ? 'critical' : pct !== null && pct > 50 ? 'high' : ''}`}
-        style={{ width: `${Math.min(100, pct || 0)}%`, background: color }}></div>
-    </div>
-    <span className="stat-value">{pct !== null ? `${pct.toFixed(1)}%` : 'no limit'}</span>
-  </div>
-)
-
-function InspectView({ inspect, stats }) {
+function InspectView({ inspect }) {
   const health = formatHealth(inspect)
   const uptime = formatUptime(inspect)
-  const resources = formatResources(inspect, stats)
   const compose = extractCompose(inspect)
   const networks = extractNetworks(inspect)
   const ports = extractPorts(inspect)
   const command = extractCommand(inspect)
-  const mounts = extractMountsSummary(inspect)
   const state = inspect?.State || {}
   const cfg = inspect?.Config || {}
-
-  const memLimitLabel = resources.memory.unlimited ? 'unlimited' : bytesToHuman(resources.memory.limitBytes)
-  const memUsedLabel = resources.memory.usedBytes !== null ? bytesToHuman(resources.memory.usedBytes) : null
 
   return (
     <div style={{ padding: '10px' }}>
@@ -109,13 +83,6 @@ function InspectView({ inspect, stats }) {
       )}
       {state.OOMKilled && <InspectRow label="OOM Killed" value="yes" tone="critical" />}
       {state.Error && <InspectRow label="Error" value={state.Error} tone="critical" />}
-
-      <SectionHeader>RESOURCES</SectionHeader>
-      <ResourceBar label="MEM" pct={resources.memory.pct} value={memUsedLabel} limit={memLimitLabel} color="#8a2be2" />
-      <InspectRow label="Mem Limit" value={memLimitLabel} />
-      {memUsedLabel && <InspectRow label="Mem Used" value={memUsedLabel} />}
-      <ResourceBar label="CPU" pct={resources.cpu.pct} value={null} limit={resources.cpu.cores ? `${resources.cpu.cores} core${resources.cpu.cores !== 1 ? 's' : ''}` : 'unlimited'} color="#00f2ff" />
-      {resources.cpu.cores > 0 && <InspectRow label="CPU Limit" value={`${resources.cpu.cores} core${resources.cpu.cores !== 1 ? 's' : ''}`} />}
 
       {compose && (
         <>
@@ -157,15 +124,6 @@ function InspectView({ inspect, stats }) {
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-all',
           }}>{command}</div>
-        </>
-      )}
-
-      {mounts.length > 0 && (
-        <>
-          <SectionHeader>MOUNTS</SectionHeader>
-          {mounts.map((m, i) => (
-            <InspectRow key={i} label={m.type || 'mount'} value={`${m.source || '?'} → ${m.destination || '?'} (${m.rw ? 'rw' : 'ro'})`} />
-          ))}
         </>
       )}
     </div>
@@ -381,7 +339,7 @@ const HolographicHUD = ({ container, onClose, onOpenBridge }) => {
       }
       case 'inspect':
         if (!docker.inspect) return <div>No data</div>
-        return <InspectView inspect={docker.inspect} stats={docker.stats} />
+        return <InspectView inspect={docker.inspect} />
       case 'volumes':
         if (!docker.volumes || docker.volumes.length === 0) return <div style={{ textAlign: 'center', marginTop: '40px', color: 'rgba(255,255,255,0.5)' }}>No active mounts detected</div>
         return (
