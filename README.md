@@ -174,9 +174,9 @@ docker run -d --name nebulaops-backend \
 
 # Start the frontend
 docker run -d --name nebulaops-frontend \
-  --network nebulaops \
-  -p 127.0.0.1:80:80 \
-  chadmany20/nebulaops-frontend:latest
+   --network nebulaops \
+   -p 127.0.0.1:80:80 \
+   chadmany20/nebulaops-frontend:latest
 
 # Open http://localhost:80
 ```

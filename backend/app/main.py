@@ -622,10 +622,11 @@ async def terminal_websocket(websocket: WebSocket, container_id: str):
 
         if hasattr(sock, 'send'):
             sock_write = sock.send
-        elif hasattr(sock, 'write'):
-            sock_write = sock.write
         elif hasattr(sock, '_sock') and hasattr(sock._sock, 'send'):
             sock_write = sock._sock.send
+        elif hasattr(sock, 'write'):
+            sock_write = sock.write
+
         else:
             await websocket.send_text("Error: Cannot determine socket write method")
             await _safe_close(websocket)
