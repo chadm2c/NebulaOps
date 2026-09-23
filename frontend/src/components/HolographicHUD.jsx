@@ -153,7 +153,7 @@ const TabLoading = ({ label = 'LOADING' }) => (
   </div>
 )
 
-const HolographicHUD = ({ container, onClose, onOpenBridge }) => {
+const HolographicHUD = ({ container, onClose, onOpenBridge, onAction }) => {
   const [activeTab, setActiveTab] = useState('stats')
   const [showTerminal, setShowTerminal] = useState(false)
   const [terminalOutput, setTerminalOutput] = useState([])
@@ -268,6 +268,7 @@ const HolographicHUD = ({ container, onClose, onOpenBridge }) => {
   }
 
   const handleAction = async (action) => {
+    if (onAction) onAction(action)
     try {
       switch(action) {
         case 'start': await docker.startContainer(container.id); break;
