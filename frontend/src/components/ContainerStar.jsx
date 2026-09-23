@@ -1,9 +1,11 @@
-import { useRef, useMemo, useState, useEffect } from 'react'
+import { useRef, useMemo, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { AnimatePresence } from 'framer-motion'
 import HolographicHUD from './HolographicHUD'
+import ExplosionBurst from './ExplosionBurst'
+import useContainerEffects from '../hooks/useContainerEffects'
 
 // Revolutionary Solar Surface Shader
 const vertexShader = `
@@ -27,10 +29,12 @@ const fragmentShader = `
   uniform float uMemory;
   uniform vec3 uColorHealthy;
   uniform vec3 uColorError;
+  uniform vec3 uColorMemory;
   uniform float uIsPaused;
-  uniform float uIsStopped;
+  uniform float uStopped;
   uniform float uIsIncident;
   uniform float uBirth; // Birth flash factor
+  uniform float uRestartPulse; // Restart pulse factor
   
   varying vec3 vNormal;
   varying vec3 vPosition;
@@ -96,11 +100,17 @@ const fragmentShader = `
     float fresnel = 1.0 - max(dot(viewDir, vNormal), 0.0);
     float limbDarkening = pow(1.0 - fresnel, 0.5);
     
-    // Base Color based on health
+    // Base Color: CPU health gradient
     float healthMix = smoothstep(30.0, 90.0, uCpu);
     vec3 color = mix(uColorHealthy, uColorError, healthMix);
     
-    if (uIsStopped > 0.5) color = vec3(0.05, 0.05, 0.08);
+    // Memory pressure tints toward violet
+    float memMix = smoothstep(30.0, 90.0, uMemory);
+    color = mix(color, uColorMemory, memMix * 0.85);
+    
+    // Restart pulse flashes white/orange
+    color = mix(color, vec3(1.0, 0.65, 0.2), uRestartPulse * 0.65);
+    
     if (uIsPaused > 0.5) color = mix(vec3(0.8, 0.4, 0.0), vec3(0.4, 0.2, 0.0), sin(uTime)*0.5+0.5);
     
     // Realistic Star Surface Integration
@@ -112,6 +122,9 @@ const fragmentShader = `
     
     // Birth Flash
     surface = mix(surface, vec3(1.0, 1.0, 1.0), uBirth);
+    
+    // Stopped dimming (animated via uStopped)
+    surface = mix(surface, vec3(0.05, 0.05, 0.08), uStopped);
     
     if (uIsIncident > 0.5) {
        surface = mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.2, 0.0), pow(fresnel, 4.0));
@@ -146,55 +159,27 @@ const coronaFragmentShader = `
   }
 `
 
+const smoothstep = (edge0, edge1, x) => {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
+  return t * t * (3 - 2 * t)
+}
+
 function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge, incident }) {
   const meshRef = useRef()
   const coronaRef = useRef()
   const materialRef = useRef()
   const coronaMatRef = useRef()
-  
-  const [birthFactor, setBirthFactor] = useState(0)
-  const [activeScale, setActiveScale] = useState(0)
+  const burstKeyRef = useRef(0)
+  const [burst, setBurst] = useState({ active: false, key: 0 })
+  const effRef = useRef({ type: 'none', start: 0, token: -1 })
+
+  const { effect, token, bumpRestart } = useContainerEffects(container)
 
   const cpu = container.cpu_percent || 0
   const memory = container.memory_percent || 0
   const isIncident = !!incident
   const isRunning = container.status === 'running'
-  
-  // Birth animation logic
-  useEffect(() => {
-    if (container.isNew) {
-      setBirthFactor(1)
-      setActiveScale(0)
-      // Rapid sequence: 0 scale -> 1.5 scale + white flash -> 1.0 scale + settle
-      let start = null
-      const duration = 1500
-      const animate = (time) => {
-        if (!start) start = time
-        const progress = (time - start) / duration
-        
-        if (progress < 0.2) {
-          // Rapid expansion and flash
-          const p = progress / 0.2
-          setActiveScale(p * 2.0)
-          setBirthFactor(1.0)
-        } else if (progress < 1.0) {
-          // Settle down
-          const p = (progress - 0.2) / 0.8
-          setActiveScale(2.0 - p * 1.0)
-          setBirthFactor(1.0 - p)
-        } else {
-          setActiveScale(1.0)
-          setBirthFactor(0)
-          return
-        }
-        requestAnimationFrame(animate)
-      }
-      requestAnimationFrame(animate)
-    } else {
-      setActiveScale(1)
-      setBirthFactor(0)
-    }
-  }, [container.isNew])
+  const isStoppedNow = container.status === 'exited' || container.status === 'stopped' || container.status === 'dead'
 
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
@@ -202,32 +187,87 @@ function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge
     uMemory: { value: memory },
     uColorHealthy: { value: new THREE.Color('#00ffff') },
     uColorError: { value: new THREE.Color('#ff3300') },
-    uIsPaused: { value: container.status === 'paused' ? 1.0 : 0.0 },
-    uIsStopped: { value: (container.status === 'exited' || container.status === 'stopped') ? 1.0 : 0.0 },
-    uIsIncident: { value: isIncident ? 1.0 : 0.0 },
-    uBirth: { value: 0 }
+    uColorMemory: { value: new THREE.Color('#bb33ff') },
+    uIsPaused: { value: 0 },
+    uStopped: { value: 0 },
+    uIsIncident: { value: 0 },
+    uBirth: { value: 0 },
+    uRestartPulse: { value: 0 }
   }), [])
 
   useFrame((state) => {
     const elapsed = state.clock.elapsedTime
-    if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = elapsed
-      materialRef.current.uniforms.uCpu.value = cpu
-      materialRef.current.uniforms.uBirth.value = birthFactor
-      
-      const pulse = 1.0 + Math.sin(elapsed * 2) * 0.05
-      const baseSize = 0.5 + (memory / 200)
-      meshRef.current.scale.setScalar(baseSize * activeScale * pulse)
+
+    if (effRef.current.token !== token) {
+      effRef.current = { type: effect, start: elapsed, token }
+      if (effect === 'explode') {
+        burstKeyRef.current += 1
+        setBurst((b) => ({ active: true, key: burstKeyRef.current }))
+      }
     }
+
+    const t = elapsed - effRef.current.start
+    const type = effRef.current.type
+    const baseSize = 0.5 + (memory / 200)
+
+    let birth = 0
+    let restartPulse = 0
+    let stopped = isStoppedNow ? 1 : 0
+    let scaleBoost = 1
+
+    if (type === 'ignite' && t < 1.5) {
+      const p = t / 1.5
+      if (p < 0.2) {
+        scaleBoost = (p / 0.2) * 2
+        birth = 1.0
+      } else {
+        const q = (p - 0.2) / 0.8
+        scaleBoost = 2 - q
+        birth = 1 - q
+      }
+      stopped = 1 - smoothstep(0, 0.35, t)
+    } else if (type === 'fade' && t < 1.2) {
+      const q = smoothstep(0, 1.2, t)
+      stopped = q
+      scaleBoost = 1 - 0.25 * q
+    } else if (type === 'explode' && t < 1.6) {
+      if (t < 0.15) {
+        birth = 1.0
+        scaleBoost = 1 + 0.6 * (t / 0.15)
+      } else {
+        scaleBoost = 1.6 - 0.85 * smoothstep(0.15, 1.2, t)
+        stopped = smoothstep(0.15, 1.2, t)
+      }
+    } else if (type === 'restart' && t < 2.0) {
+      restartPulse = Math.max(0, 0.5 - 0.5 * Math.cos(t * Math.PI * 3))
+      scaleBoost = 1 + 0.3 * restartPulse
+    }
+
+    const m = materialRef.current?.uniforms
+    if (m) {
+      m.uTime.value = elapsed
+      m.uCpu.value = cpu
+      m.uMemory.value = memory
+      m.uIsPaused.value = container.status === 'paused' ? 1 : 0
+      m.uStopped.value = stopped
+      m.uIsIncident.value = isIncident ? 1 : 0
+      m.uBirth.value = birth
+      m.uRestartPulse.value = restartPulse
+    }
+
+    const pulse = 1.0 + Math.sin(elapsed * 2) * 0.05
+    meshRef.current?.scale.setScalar(baseSize * scaleBoost * pulse)
+
     if (coronaMatRef.current) {
       coronaMatRef.current.uniforms.uTime.value = elapsed
-      coronaMatRef.current.uniforms.uBirth.value = birthFactor
+      coronaMatRef.current.uniforms.uBirth.value = birth
       const healthyColor = new THREE.Color('#00ffff')
       const errorColor = new THREE.Color('#ff3300')
-      coronaMatRef.current.uniforms.uColor.value = healthyColor.lerp(errorColor, cpu / 100)
-      
-      const baseSize = 0.5 + (memory / 200)
-      coronaRef.current.scale.setScalar(baseSize * activeScale * 1.4)
+      const memoryColor = new THREE.Color('#bb33ff')
+      let c = healthyColor.lerp(errorColor, cpu / 100)
+      c = c.lerp(memoryColor, Math.min(1, memory / 100) * 0.85 * 0.5)
+      coronaMatRef.current.uniforms.uColor.value = c
+      coronaRef.current?.scale.setScalar(baseSize * scaleBoost * 1.4)
     }
   })
 
@@ -271,8 +311,16 @@ function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge
       {isRunning && (
         <pointLight 
           color={cpu > 70 ? "#ff3300" : "#00ffff"} 
-          intensity={2 + birthFactor * 10} 
+          intensity={2 + birth * 10} 
           distance={15} 
+        />
+      )}
+
+      {/* Crash Explosion */}
+      {burst.active && (
+        <ExplosionBurst
+          key={burst.key}
+          onComplete={() => setBurst((b) => ({ ...b, active: false }))}
         />
       )}
 
@@ -292,6 +340,9 @@ function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge
                     container={container} 
                     onClose={() => onSelect(null)} 
                     onOpenBridge={onOpenBridge}
+                    onAction={(action) => {
+                      if (action === 'restart') bumpRestart()
+                    }}
                   />
                </div>
             ) : (
