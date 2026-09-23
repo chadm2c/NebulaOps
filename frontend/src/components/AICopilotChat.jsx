@@ -69,11 +69,14 @@ function AICopilotChat({ isOpen, onClose, history, onSendMessage }) {
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .chat-scroll::-webkit-scrollbar {
-          width: 4px;
+          width: 10px;
         }
         .chat-scroll::-webkit-scrollbar-thumb {
           background: rgba(0, 242, 255, 0.3);
-          border-radius: 4px;
+          border-radius: 5px;
+        }
+        .chat-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 242, 255, 0.6);
         }
         .typing-indicator {
           align-self: flex-start;

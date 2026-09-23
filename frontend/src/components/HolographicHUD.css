@@ -147,14 +147,17 @@
 
 /* Custom Scrollbar for Sensor Content */
 .sensor-content::-webkit-scrollbar {
-  width: 4px;
+  width: 10px;
 }
 .sensor-content::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.2);
 }
 .sensor-content::-webkit-scrollbar-thumb {
   background: rgba(0, 242, 255, 0.3);
-  border-radius: 2px;
+  border-radius: 5px;
+}
+.sensor-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 242, 255, 0.6);
 }
 
 .log-line {

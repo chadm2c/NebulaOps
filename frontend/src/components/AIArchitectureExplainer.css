@@ -85,7 +85,7 @@
 }
 
 .modal-body::-webkit-scrollbar {
-  width: 4px;
+  width: 10px;
 }
 
 .modal-body::-webkit-scrollbar-track {
@@ -94,7 +94,11 @@
 
 .modal-body::-webkit-scrollbar-thumb {
   background: rgba(0, 242, 255, 0.3);
-  border-radius: 2px;
+  border-radius: 5px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 242, 255, 0.6);
 }
 
 .metrics-grid {
