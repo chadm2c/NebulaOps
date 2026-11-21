@@ -169,6 +169,7 @@ function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge
   const coronaRef = useRef()
   const materialRef = useRef()
   const coronaMatRef = useRef()
+  const lightRef = useRef()
   const burstKeyRef = useRef(0)
   const [burst, setBurst] = useState({ active: false, key: 0 })
   const effRef = useRef({ type: 'none', start: 0, token: -1 })
@@ -255,6 +256,10 @@ function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge
       m.uRestartPulse.value = restartPulse
     }
 
+    if (lightRef.current) {
+      lightRef.current.intensity = 2 + birth * 10
+    }
+
     const pulse = 1.0 + Math.sin(elapsed * 2) * 0.05
     meshRef.current?.scale.setScalar(baseSize * scaleBoost * pulse)
 
@@ -310,8 +315,9 @@ function ContainerStar({ container, position, onSelect, selectedId, onOpenBridge
       {/* Dynamic Lighting */}
       {isRunning && (
         <pointLight 
+          ref={lightRef}
           color={cpu > 70 ? "#ff3300" : "#00ffff"} 
-          intensity={2 + birth * 10} 
+          intensity={2}
           distance={15} 
         />
       )}
